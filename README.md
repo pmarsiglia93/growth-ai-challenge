@@ -110,7 +110,24 @@ interface (a lógica é simples) e reexporte por cima.
 
 ## Como eu integraria isso em produção (VTEX IO)
 
-> _A ser detalhado na etapa de produção._
+Em produção na **VTEX IO**, o widget viraria um app próprio (`vendor.product-ai-widget`):
+
+- **Front (`react/`)**: o `ProductAIWidget` vira um bloco React do app. Declaro o
+  bloco em `store/interfaces.json` (`"product-ai-widget": { "component": "ProductAIWidget" }`)
+  e plugo em `store.product` via `blocks.json` do tema. >>PAULO REVISA: ajustar nome
+  do vendor e ponto exato de injeção no theme/IO conforme sua experiência real<<
+- **Contexto de produto**: em vez de receber props da página, o componente lê o
+  contexto do tema com `useProduct()` (`vtex.product-context`), pegando `productId`,
+  `productName`, `description` e `categories` — sem passar dados manualmente.
+- **Backend de enrich**: a lógica de `lib/enrich.ts` roda num **serviço Node do
+  próprio app** (`node/`, service VTEX IO) exposto como rota; o front chama via
+  `vtex.io` runtime. Alternativa: um **middleware/serviço externo** que o app
+  consome. >>PAULO REVISA: escolher serviço node/ do app vs. middleware externo
+  conforme o cenário de latência/escala que você já enfrentou<<
+- **Cache**: o `Map` em memória vira VBase ou um cache do próprio IO por `productId`.
+- **Chave do LLM**: nunca no front. Fica como **secret/app settings da VTEX**
+  (`manifest.json` → `settingsSchema`, lida no service via `ctx.vtex` /
+  `process.env`), nunca exposta no bundle do navegador. >>PAULO REVISA<<
 
 ## Decisões técnicas e por quê
 
