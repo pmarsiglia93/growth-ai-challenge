@@ -57,7 +57,56 @@ npm test
 
 ## Como rodar e importar o fluxo n8n
 
-> _A ser detalhado na etapa do fluxo n8n._
+O arquivo `n8n/flow.json` representa o fluxo:
+
+```
+Webhook (POST /webhook/produto)
+  → HTTP Request (POST http://localhost:3000/api/enrich-product)
+      → IF (statusCode == 200)
+          ├─ true  → Set "Log Sucesso"  (loga a resposta)
+          └─ false → Set "Tratar Erro"  (loga statusCode + mensagem de falha)
+```
+
+O nó HTTP usa **Continue On Fail** (`onError: continueRegularOutput`) + `neverError`,
+então erros 4xx/5xx da API não derrubam o fluxo: caem no ramo `false` do IF.
+
+### Honestidade sobre o schema
+
+O schema interno dos nós do n8n **muda entre versões** (campos, `typeVersion`,
+formato de `conditions`). O `flow.json` aqui foi escrito para uma versão recente
+do n8n e pode precisar de pequenos ajustes na sua instalação. Trate-o como um
+ponto de partida e valide na UI. Se algum nó importar "quebrado", remonte-o pela
+interface (a lógica é simples) e reexporte por cima.
+
+### Passo a passo
+
+1. **Suba o app** (noutro terminal): `npm run dev` (ou `npm start` após `npm run build`).
+   Garanta que `http://localhost:3000/api/enrich-product` responde.
+2. **Suba o n8n**: `npx n8n` e abra `http://localhost:5678`.
+3. **Importe o fluxo**: menu (⋯) → **Import from File** → selecione `n8n/flow.json`.
+4. **Valide os nós**: abra cada nó e confirme — em especial o **IF** (`statusCode == 200`)
+   e o **HTTP Request** (URL, método POST e o JSON do body). Reconecte qualquer
+   conexão que não tenha vindo na importação.
+5. **Ative/execute**: clique em **Execute Workflow** (ou ative o webhook em produção).
+   Copie a **Test URL** do nó Webhook.
+6. **Dispare um teste** (noutro terminal):
+
+   ```bash
+   curl -X POST http://localhost:5678/webhook-test/produto \
+     -H "Content-Type: application/json" \
+     -d '{
+       "productId": "001",
+       "productTitle": "Tênis Running Pro X200",
+       "productDescription": "Tênis de corrida com amortecimento EVA duplo.",
+       "category": "Calçados Esportivos"
+     }'
+   ```
+
+   > A URL exata (`/webhook/produto` vs `/webhook-test/produto`) aparece no próprio
+   > nó Webhook — use a que o n8n mostrar.
+7. **Confira a execução** na aba *Executions*: o ramo Sucesso deve conter `bullets`
+   e `faqs`; force um erro (ex.: app desligado) para ver o ramo de falha tratado.
+8. **Reexporte** se ajustar algo: **Download** / *Export* → salve por cima de `n8n/flow.json`.
 
 ## Como eu integraria isso em produção (VTEX IO)
 
