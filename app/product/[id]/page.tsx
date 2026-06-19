@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductById } from "@/lib/products";
+import ProductAIWidget from "@/components/ProductAIWidget";
 
 interface ProductPageProps {
   params: { id: string };
@@ -37,15 +38,12 @@ export default function ProductPage({ params }: ProductPageProps) {
         </div>
       </dl>
 
-      {/*
-        ProductAIWidget entra aqui na Etapa 4 (junto com a API):
-        <ProductAIWidget
-          productId={product.id}
-          productTitle={product.title}
-          productDescription={product.description}
-          category={product.category}
-        />
-      */}
+      <ProductAIWidget
+        productId={product.id}
+        productTitle={product.title}
+        productDescription={product.description}
+        category={product.category}
+      />
     </div>
   );
 }
