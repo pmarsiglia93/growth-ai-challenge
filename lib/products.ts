@@ -1,11 +1,7 @@
 import productsData from "@/data/products.json";
+import type { Product } from "@/lib/types";
 
-export interface Product {
-  id: string;
-  title: string;
-  category: string;
-  description: string;
-}
+export type { Product };
 
 const products: Product[] = productsData;
 

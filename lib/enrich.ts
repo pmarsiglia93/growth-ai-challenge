@@ -1,0 +1,165 @@
+import Anthropic from "@anthropic-ai/sdk";
+import type { EnrichResult, Faq } from "@/lib/types";
+
+const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+const MAX_TOKENS = 1024;
+
+/** Erro tipado de enriquecimento — vira 500 na API. */
+export class EnrichError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EnrichError";
+  }
+}
+
+interface BuildPromptArgs {
+  title: string;
+  category: string;
+  description: string;
+}
+
+function buildPrompt({ title, category, description }: BuildPromptArgs): string {
+  return [
+    "Você é um especialista em copywriting de e-commerce brasileiro.",
+    "Gere conteúdo de enriquecimento, em pt-BR, para o produto abaixo.",
+    "NÃO invente especificações que não estejam na descrição.",
+    "Responda EXCLUSIVAMENTE com um JSON válido, sem nenhum texto antes ou depois",
+    "e sem cercas de código, no formato exato:",
+    '{"bullets": string[], "faqs": [{"question": string, "answer": string}]}.',
+    "Regras: 'bullets' deve ter 2 a 3 itens curtos destacando benefícios reais",
+    "derivados da descrição; 'faqs' deve ter exatamente 3 perguntas comuns de quem",
+    "vai comprar, com respostas úteis e honestas baseadas na descrição.",
+    `Produto — Título: ${title} | Categoria: ${category} | Descrição: ${description}`,
+  ].join(" ");
+}
+
+/**
+ * Remove cercas ```json ... ``` e extrai o primeiro objeto JSON `{...}` do texto.
+ * O modelo é instruído a não usar cercas, mas tratamos defensivamente mesmo assim.
+ */
+function extractJsonObject(raw: string): string {
+  let text = raw.trim();
+
+  // Remove cercas de código (```json ... ``` ou ``` ... ```).
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced && fenced[1]) {
+    text = fenced[1].trim();
+  }
+
+  // Recorta do primeiro "{" até o último "}" para descartar texto residual.
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) {
+    throw new EnrichError("Resposta do LLM não contém um objeto JSON.");
+  }
+  return text.slice(start, end + 1);
+}
+
+/** Type guard para `Faq`. */
+function isFaq(value: unknown): value is Faq {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.question === "string" &&
+    typeof candidate.answer === "string"
+  );
+}
+
+/**
+ * Valida que o objeto parseado tem a forma de `EnrichResult`:
+ * bullets = array de 2-3 strings; faqs = array de exatamente 3 {question, answer}.
+ * Lança `EnrichError` se inválido.
+ */
+function validateResult(parsed: unknown): EnrichResult {
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new EnrichError("JSON do LLM não é um objeto.");
+  }
+  const obj = parsed as Record<string, unknown>;
+
+  const { bullets, faqs } = obj;
+
+  if (
+    !Array.isArray(bullets) ||
+    bullets.length < 2 ||
+    bullets.length > 3 ||
+    !bullets.every((b): b is string => typeof b === "string")
+  ) {
+    throw new EnrichError("'bullets' deve ser um array de 2 a 3 strings.");
+  }
+
+  if (!Array.isArray(faqs) || faqs.length !== 3 || !faqs.every(isFaq)) {
+    throw new EnrichError(
+      "'faqs' deve ser um array de exatamente 3 itens {question, answer}.",
+    );
+  }
+
+  return { bullets, faqs };
+}
+
+/** Extrai o texto concatenado dos blocos de texto da resposta da Anthropic. */
+function extractText(message: Anthropic.Message): string {
+  return message.content
+    .filter(
+      (block): block is Anthropic.TextBlock => block.type === "text",
+    )
+    .map((block) => block.text)
+    .join("");
+}
+
+interface EnrichArgs {
+  title: string;
+  category: string;
+  description: string;
+  /** Quando true, usa temperatura mais alta para variar o conteúdo. */
+  regenerate?: boolean;
+}
+
+/**
+ * Chama o LLM e devolve um `EnrichResult` validado.
+ * Lança `EnrichError` em qualquer falha de chamada ou parse.
+ */
+export async function generateEnrichment({
+  title,
+  category,
+  description,
+  regenerate = false,
+}: EnrichArgs): Promise<EnrichResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new EnrichError("ANTHROPIC_API_KEY não está configurada no servidor.");
+  }
+
+  const client = new Anthropic({ apiKey });
+  const model = process.env.LLM_MODEL || DEFAULT_MODEL;
+
+  let message: Anthropic.Message;
+  try {
+    message = await client.messages.create({
+      model,
+      max_tokens: MAX_TOKENS,
+      // Temperatura mais alta no regenerate garante variação real do conteúdo.
+      temperature: regenerate ? 0.9 : 0.4,
+      messages: [
+        {
+          role: "user",
+          content: buildPrompt({ title, category, description }),
+        },
+      ],
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new EnrichError(`Falha ao chamar o LLM: ${detail}`);
+  }
+
+  const rawText = extractText(message);
+  const jsonText = extractJsonObject(rawText);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new EnrichError("Não foi possível parsear o JSON retornado pelo LLM.");
+  }
+
+  return validateResult(parsed);
+}
