@@ -106,52 +106,12 @@ function extractText(message: Anthropic.Message): string {
     .join("");
 }
 
-interface EnrichArgs {
-  title: string;
-  category: string;
-  description: string;
-  /** Quando true, usa temperatura mais alta para variar o conteúdo. */
-  regenerate?: boolean;
-}
-
 /**
- * Chama o LLM e devolve um `EnrichResult` validado.
- * Lança `EnrichError` em qualquer falha de chamada ou parse.
+ * Faz o parse defensivo do texto cru do LLM e devolve um `EnrichResult` validado.
+ * Reutilizado tanto pelo modo JSON quanto pelo modo streaming.
+ * Lança `EnrichError` em qualquer falha de parse/validação.
  */
-export async function generateEnrichment({
-  title,
-  category,
-  description,
-  regenerate = false,
-}: EnrichArgs): Promise<EnrichResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new EnrichError("ANTHROPIC_API_KEY não está configurada no servidor.");
-  }
-
-  const client = new Anthropic({ apiKey });
-  const model = process.env.LLM_MODEL || DEFAULT_MODEL;
-
-  let message: Anthropic.Message;
-  try {
-    message = await client.messages.create({
-      model,
-      max_tokens: MAX_TOKENS,
-      // Temperatura mais alta no regenerate garante variação real do conteúdo.
-      temperature: regenerate ? 0.9 : 0.4,
-      messages: [
-        {
-          role: "user",
-          content: buildPrompt({ title, category, description }),
-        },
-      ],
-    });
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    throw new EnrichError(`Falha ao chamar o LLM: ${detail}`);
-  }
-
-  const rawText = extractText(message);
+export function parseEnrichmentResponse(rawText: string): EnrichResult {
   const jsonText = extractJsonObject(rawText);
 
   let parsed: unknown;
@@ -163,3 +123,68 @@ export async function generateEnrichment({
 
   return validateResult(parsed);
 }
+
+interface EnrichArgs {
+  title: string;
+  category: string;
+  description: string;
+  /** Quando true, usa temperatura mais alta para variar o conteúdo. */
+  regenerate?: boolean;
+}
+
+/** Cria o client Anthropic, validando a presença da chave. */
+function getClient(): Anthropic {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new EnrichError("ANTHROPIC_API_KEY não está configurada no servidor.");
+  }
+  return new Anthropic({ apiKey });
+}
+
+/** Parâmetros compartilhados da chamada ao LLM (JSON e streaming). */
+function buildRequestParams({
+  title,
+  category,
+  description,
+  regenerate = false,
+}: EnrichArgs): Anthropic.MessageCreateParamsNonStreaming {
+  return {
+    model: process.env.LLM_MODEL || DEFAULT_MODEL,
+    max_tokens: MAX_TOKENS,
+    // Temperatura mais alta no regenerate garante variação real do conteúdo.
+    temperature: regenerate ? 0.9 : 0.4,
+    messages: [
+      { role: "user", content: buildPrompt({ title, category, description }) },
+    ],
+  };
+}
+
+/**
+ * Chama o LLM (modo não-streaming) e devolve um `EnrichResult` validado.
+ * Lança `EnrichError` em qualquer falha de chamada ou parse.
+ */
+export async function generateEnrichment(args: EnrichArgs): Promise<EnrichResult> {
+  const client = getClient();
+
+  let message: Anthropic.Message;
+  try {
+    message = await client.messages.create(buildRequestParams(args));
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new EnrichError(`Falha ao chamar o LLM: ${detail}`);
+  }
+
+  return parseEnrichmentResponse(extractText(message));
+}
+
+/**
+ * Cria um stream de mensagem do LLM (modo streaming).
+ * O chamador itera os deltas de texto e, ao final, usa `finalMessage()` +
+ * `parseEnrichmentResponse(extractText(...))` para validar e cachear.
+ */
+export function createEnrichmentStream(args: EnrichArgs) {
+  const client = getClient();
+  return client.messages.stream(buildRequestParams(args));
+}
+
+export { extractText };

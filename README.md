@@ -145,3 +145,18 @@ Em produção na **VTEX IO**, o widget viraria um app próprio (`vendor.product-
 - **Escolha do modelo.** Default `claude-haiku-4-5` (rápido e barato) via env
   `LLM_MODEL`; trocável sem alterar código. `temperature` mais alta no
   `regenerate` para garantir variação real do conteúdo.
+- **Streaming opcional, desligado por padrão.** Com `STREAMING_ENABLED=false`
+  (default) a rota responde JSON normalmente. Com `STREAMING_ENABLED=true`, no
+  cache miss ela responde via `ReadableStream` (os deltas de texto do modelo) e,
+  ao final, valida o JSON acumulado e grava no cache. O `ProductAIWidget`
+  permanece no contrato JSON — o streaming está pronto no backend mas **não está
+  fiado na UI** (consumir JSON parcial no cliente exigiria reescrever o parser do
+  widget, complexidade sem ganho para este escopo). Para testar o stream:
+
+  ```bash
+  STREAMING_ENABLED=true npm run dev
+  # noutro terminal:
+  curl -N -X POST http://localhost:3000/api/enrich-product \
+    -H "Content-Type: application/json" \
+    -d '{"productId":"001","productTitle":"Tênis Running Pro X200","productDescription":"Tênis de corrida com amortecimento EVA duplo.","category":"Calçados Esportivos"}'
+  ```
