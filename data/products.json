@@ -1,0 +1,26 @@
+[
+  {
+    "id": "001",
+    "title": "Tênis Running Pro X200",
+    "category": "Calçados Esportivos",
+    "description": "Tênis de corrida com solado de borracha carbono, cabedal em mesh respirável, amortecimento EVA duplo e drop de 8mm. Indicado para treinos de longa distância em asfalto."
+  },
+  {
+    "id": "002",
+    "title": "Cafeteira Italiana Espresso 6 xícaras",
+    "category": "Eletrodomésticos",
+    "description": "Cafeteira italiana em alumínio fundido com válvula de segurança, tampa termoplástica e capacidade para 6 xícaras. Compatível com fogão a gás e elétrico."
+  },
+  {
+    "id": "003",
+    "title": "Mochila Urbana Impermeável 30L",
+    "category": "Acessórios",
+    "description": "Mochila em nylon 600D impermeável com compartimento para notebook até 15,6\", alças ergonómicas acolchoadas, porta USB lateral e fecho anti-furto oculto."
+  },
+  {
+    "id": "004",
+    "title": "Suplemento Whey Protein Concentrado 1kg",
+    "category": "Suplementos",
+    "description": "Whey protein concentrado com 24g de proteína por dose, baixo teor de gordura, sabor chocolate belga. Sem glúten, sem lactose em excesso. Indicado para ganho muscular e recuperação pós-treino."
+  }
+]
