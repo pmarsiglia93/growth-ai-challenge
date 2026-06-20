@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { EnrichRequest } from "@/lib/types";
+import type { EnrichRequest, Locale } from "@/lib/types";
 import {
   generateEnrichment,
   createEnrichmentStream,
@@ -42,6 +42,15 @@ function parseBody(
     return { ok: false, error: "Campo 'regenerate' deve ser booleano." };
   }
 
+  if (
+    "locale" in obj &&
+    obj.locale !== undefined &&
+    obj.locale !== "pt-BR" &&
+    obj.locale !== "en"
+  ) {
+    return { ok: false, error: "Campo 'locale' deve ser 'pt-BR' ou 'en'." };
+  }
+
   return {
     ok: true,
     data: {
@@ -50,6 +59,7 @@ function parseBody(
       productDescription: obj.productDescription as string,
       category: obj.category as string,
       regenerate: obj.regenerate === true,
+      locale: (obj.locale as Locale | undefined) ?? "pt-BR",
     },
   };
 }
@@ -61,6 +71,7 @@ function parseBody(
  */
 function streamEnrichment(
   productId: string,
+  locale: Locale,
   args: Parameters<typeof createEnrichmentStream>[0],
 ): Response {
   const encoder = new TextEncoder();
@@ -82,7 +93,7 @@ function streamEnrichment(
         // Validação + cache acontecem com o texto completo, ao final do stream.
         const finalMessage = await llmStream.finalMessage();
         const result = parseEnrichmentResponse(extractText(finalMessage));
-        setCached(productId, result);
+        setCached(productId, locale, result);
         controller.close();
       } catch (err) {
         console.error("[enrich-product] falha no streaming:", err);
@@ -112,28 +123,35 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
-  const { productId, productTitle, productDescription, category, regenerate } =
-    parsed.data;
+  const {
+    productId,
+    productTitle,
+    productDescription,
+    category,
+    regenerate,
+    locale = "pt-BR",
+  } = parsed.data;
 
-  // Sem regenerate: serve do cache se já existir (rápido).
+  // Sem regenerate: serve do cache se já existir (rápido). Cache é por idioma.
   if (!regenerate) {
-    const cached = getCached(productId);
+    const cached = getCached(productId, locale);
     if (cached) {
       return NextResponse.json(cached, { status: 200 });
     }
   } else {
     // Com regenerate: invalida ANTES de gerar — sem isso o "Regenerar"
     // devolveria sempre o mesmo conteúdo cacheado.
-    invalidateCache(productId);
+    invalidateCache(productId, locale);
   }
 
   // Modo streaming (opcional, desligado por padrão).
   if (process.env.STREAMING_ENABLED === "true") {
-    return streamEnrichment(productId, {
+    return streamEnrichment(productId, locale, {
       title: productTitle,
       category,
       description: productDescription,
       regenerate,
+      locale,
     });
   }
 
@@ -143,8 +161,9 @@ export async function POST(request: Request): Promise<Response> {
       category,
       description: productDescription,
       regenerate,
+      locale,
     });
-    setCached(productId, result);
+    setCached(productId, locale, result);
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     const message =

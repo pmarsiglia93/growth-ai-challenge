@@ -11,6 +11,9 @@ export interface Product {
   description: string;
 }
 
+/** Idiomas suportados pelo enriquecimento. */
+export type Locale = "pt-BR" | "en";
+
 /** Corpo aceito por POST /api/enrich-product. */
 export interface EnrichRequest {
   productId: string;
@@ -18,6 +21,8 @@ export interface EnrichRequest {
   productDescription: string;
   category: string;
   regenerate?: boolean;
+  /** Idioma do conteúdo gerado. Default: pt-BR. */
+  locale?: Locale;
 }
 
 /** Uma pergunta frequente com a respectiva resposta. */

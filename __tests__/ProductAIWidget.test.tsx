@@ -96,4 +96,30 @@ describe("ProductAIWidget", () => {
     const body = JSON.parse(init.body as string) as { regenerate: boolean };
     expect(body.regenerate).toBe(true);
   });
+
+  it("(e) trocar para EN dispara novo fetch com locale 'en'", async () => {
+    const fetchMock = jest.fn(
+      async (_url: string, _init?: RequestInit): Promise<Response> =>
+        jsonResponse(sampleResult),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<ProductAIWidget {...props} />);
+
+    // Primeiro fetch (mount) usa o default pt-BR.
+    await screen.findByText("Amortecimento confortável");
+    const firstInit = fetchMock.mock.calls[0]?.[1];
+    if (!firstInit) throw new Error("primeira chamada sem init");
+    const firstBody = JSON.parse(firstInit.body as string) as { locale: string };
+    expect(firstBody.locale).toBe("pt-BR");
+
+    // Clica no botão EN.
+    await userEvent.click(screen.getByRole("button", { name: "EN" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const enInit = fetchMock.mock.calls[1]?.[1];
+    if (!enInit) throw new Error("segunda chamada sem init");
+    const enBody = JSON.parse(enInit.body as string) as { locale: string };
+    expect(enBody.locale).toBe("en");
+  });
 });

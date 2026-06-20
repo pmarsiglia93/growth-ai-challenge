@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { EnrichResult, Faq } from "@/lib/types";
+import type { EnrichResult, Faq, Locale } from "@/lib/types";
 
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 1024;
@@ -16,12 +16,24 @@ interface BuildPromptArgs {
   title: string;
   category: string;
   description: string;
+  locale: Locale;
 }
 
-function buildPrompt({ title, category, description }: BuildPromptArgs): string {
+function buildPrompt({
+  title,
+  category,
+  description,
+  locale,
+}: BuildPromptArgs): string {
+  const languageDirective =
+    locale === "en"
+      ? "TODO o conteúdo gerado (bullets, perguntas e respostas) deve ser escrito em INGLÊS (en-US)."
+      : "TODO o conteúdo gerado (bullets, perguntas e respostas) deve ser escrito em PORTUGUÊS DO BRASIL (pt-BR).";
+
   return [
-    "Você é um especialista em copywriting de e-commerce brasileiro.",
-    "Gere conteúdo de enriquecimento, em pt-BR, para o produto abaixo.",
+    "Você é um especialista em copywriting de e-commerce.",
+    "Gere conteúdo de enriquecimento para o produto abaixo.",
+    languageDirective,
     "NÃO invente especificações que não estejam na descrição.",
     "Responda EXCLUSIVAMENTE com um JSON válido, sem nenhum texto antes ou depois",
     "e sem cercas de código, no formato exato:",
@@ -130,6 +142,8 @@ interface EnrichArgs {
   description: string;
   /** Quando true, usa temperatura mais alta para variar o conteúdo. */
   regenerate?: boolean;
+  /** Idioma do conteúdo gerado. Default: pt-BR. */
+  locale?: Locale;
 }
 
 /** Cria o client Anthropic, validando a presença da chave. */
@@ -147,6 +161,7 @@ function buildRequestParams({
   category,
   description,
   regenerate = false,
+  locale = "pt-BR",
 }: EnrichArgs): Anthropic.MessageCreateParamsNonStreaming {
   return {
     model: process.env.LLM_MODEL || DEFAULT_MODEL,
@@ -154,7 +169,10 @@ function buildRequestParams({
     // Temperatura mais alta no regenerate garante variação real do conteúdo.
     temperature: regenerate ? 0.9 : 0.4,
     messages: [
-      { role: "user", content: buildPrompt({ title, category, description }) },
+      {
+        role: "user",
+        content: buildPrompt({ title, category, description, locale }),
+      },
     ],
   };
 }

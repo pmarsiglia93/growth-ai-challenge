@@ -108,6 +108,21 @@ interface (a lógica é simples) e reexporte por cima.
    e `faqs`; force um erro (ex.: app desligado) para ver o ramo de falha tratado.
 8. **Reexporte** se ajustar algo: **Download** / *Export* → salve por cima de `n8n/flow.json`.
 
+### Segundo fluxo (opcional) — agendado, processa os 4 produtos
+
+`n8n/flow-schedule.json` é um **diferencial**: um **Schedule Trigger** que, a cada
+X minutos (default 30), dispara o enriquecimento dos 4 produtos em sequência.
+
+```
+Schedule Trigger (a cada 30 min)
+  → Code "Lista de Produtos" (emite os 4 produtos como itens)
+      → HTTP Request (roda 1x por produto, batchSize 1) → Set "Log por Produto"
+```
+
+Importe da mesma forma (`Import from File` → `n8n/flow-schedule.json`). Ajuste o
+intervalo no nó **Schedule Trigger** e clique em **Execute Workflow** para testar
+agora (não precisa esperar o agendamento). O app Next precisa estar rodando.
+
 ## Como eu integraria isso em produção (VTEX IO)
 
 Em produção na **VTEX IO**, eu empacotaria isto como um app próprio
@@ -146,6 +161,10 @@ Em produção na **VTEX IO**, eu empacotaria isto como um app próprio
 - **Escolha do modelo.** Default `claude-haiku-4-5` (rápido e barato) via env
   `LLM_MODEL`; trocável sem alterar código. `temperature` mais alta no
   `regenerate` para garantir variação real do conteúdo.
+- **Multi-idioma (pt-BR / en).** O widget detecta `navigator.language` no mount e
+  oferece um toggle **PT/EN**; o `locale` vai no corpo da requisição e o prompt
+  instrui o idioma de saída. O **cache é chaveado por `productId + locale`** —
+  sem isso, trocar de idioma devolveria o conteúdo cacheado no idioma errado.
 - **Streaming opcional, desligado por padrão.** Com `STREAMING_ENABLED=false`
   (default) a rota responde JSON normalmente. Com `STREAMING_ENABLED=true`, no
   cache miss ela responde via `ReadableStream` (os deltas de texto do modelo) e,
