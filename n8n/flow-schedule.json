@@ -1,0 +1,102 @@
+{
+  "name": "Growth AI - Enriquecimento Agendado (todos os produtos)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "c2b2f002-0001-4001-8001-000000000001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Emite os 4 produtos como itens separados. O nó HTTP Request seguinte\n// roda uma vez por item, processando todos em sequência.\nconst produtos = [\n  { productId: '001', productTitle: 'Tênis Running Pro X200', productDescription: 'Tênis de corrida com solado de borracha carbono, cabedal em mesh respirável, amortecimento EVA duplo e drop de 8mm. Indicado para treinos de longa distância em asfalto.', category: 'Calçados Esportivos' },\n  { productId: '002', productTitle: 'Cafeteira Italiana Espresso 6 xícaras', productDescription: 'Cafeteira italiana em alumínio fundido com válvula de segurança, tampa termoplástica e capacidade para 6 xícaras. Compatível com fogão a gás e elétrico.', category: 'Eletrodomésticos' },\n  { productId: '003', productTitle: 'Mochila Urbana Impermeável 30L', productDescription: 'Mochila em nylon 600D impermeável com compartimento para notebook até 15,6\\\", alças ergonômicas acolchoadas, porta USB lateral e fecho anti-furto oculto.', category: 'Acessórios' },\n  { productId: '004', productTitle: 'Suplemento Whey Protein Concentrado 1kg', productDescription: 'Whey protein concentrado com 24g de proteína por dose, baixo teor de gordura, sabor chocolate belga. Sem glúten, sem lactose em excesso. Indicado para ganho muscular e recuperação pós-treino.', category: 'Suplementos' },\n];\nreturn produtos.map((p) => ({ json: p }));"
+      },
+      "id": "c2b2f002-0002-4002-8002-000000000002",
+      "name": "Lista de Produtos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/enrich-product",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ productId: $json.productId, productTitle: $json.productTitle, productDescription: $json.productDescription, category: $json.category }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1000
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "c2b2f002-0003-4003-8003-000000000003",
+      "name": "Enriquecer cada produto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1000000-0000-4000-8000-000000000001",
+              "name": "statusCode",
+              "value": "={{ $json.statusCode }}",
+              "type": "number"
+            },
+            {
+              "id": "a1000000-0000-4000-8000-000000000002",
+              "name": "resultado",
+              "value": "={{ $json.body }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c2b2f002-0004-4004-8004-000000000004",
+      "name": "Log por Produto",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [960, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{ "node": "Lista de Produtos", "type": "main", "index": 0 }]]
+    },
+    "Lista de Produtos": {
+      "main": [[{ "node": "Enriquecer cada produto", "type": "main", "index": 0 }]]
+    },
+    "Enriquecer cada produto": {
+      "main": [[{ "node": "Log por Produto", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
