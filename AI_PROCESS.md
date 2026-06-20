@@ -1,62 +1,57 @@
 # Processo de uso de IA
 
-> Este documento foi rascunhado a partir do que de fato aconteceu durante a
-> construção do projeto. As seções de experiência pessoal (especialmente
-> "Aprendizados") estão marcadas com `>>PAULO REVISA<<` para você confirmar,
-> cortar ou reescrever na sua própria voz — a avaliação valoriza honestidade.
+Relato honesto de como construí este projeto com apoio de IA.
 
 ## Ferramentas de IA usadas
 
-_Pergunta-guia: quais ferramentas, para quê, e em que parte do fluxo?_
-
-- **Claude Code** (CLI da Anthropic, modelo Claude) como par de programação,
-  conduzindo o projeto de forma incremental, etapa a etapa.
-- Uso principal: scaffold do Next.js, geração dos componentes/rotas, escrita dos
-  testes e da documentação, sempre com revisão e aprovação a cada commit.
-- >>PAULO REVISA: cite aqui outras ferramentas que você realmente usou (ex.: Copilot,
-  ChatGPT, etc.) e remova esta linha se não houver<<
+- **Claude Code** (CLI da Anthropic, com modelo Claude) como par de programação,
+  conduzindo o projeto de forma incremental, etapa a etapa, com um commit pequeno
+  por entrega.
+- A própria **API da Anthropic** (`@anthropic-ai/sdk`, modelo `claude-haiku-4-5`)
+  é o motor de enriquecimento do produto final.
 
 ## Técnicas de prompt utilizadas
 
-_Pergunta-guia: como você guiou a IA para obter bom resultado?_
-
-- **Especificação detalhada antecipada**: um prompt inicial extenso definindo
-  stack, estrutura de arquivos, contratos de tipos, comportamento esperado e o
-  plano de execução em commits pequenos.
-- **Trabalho incremental com checkpoint humano**: "mostre o plano antes de gerar
-  muito código" e aprovação explícita a cada etapa antes de seguir.
-- **Pedido de sinalização de decisões técnicas** e de perguntar em vez de adivinhar
-  quando algo estivesse ambíguo.
-- **Priorizar entrega** sobre perfeição (soluções simples e corretas).
-- >>PAULO REVISA: ajuste conforme as técnicas que VOCÊ considera que aplicou<<
+- **Especificação detalhada antecipada**: abri o trabalho com um prompt extenso
+  definindo stack, estrutura de arquivos, contratos de tipos, comportamento de
+  cada parte e um plano de execução em commits pequenos. Isso reduziu idas e
+  vindas e manteve a IA dentro do escopo.
+- **Trabalho incremental com checkpoint humano**: pedi para a IA mostrar o plano
+  antes de gerar muito código e aprovei cada etapa antes de seguir.
+- **Pedido explícito de sinalização de decisões técnicas** e de perguntar em vez
+  de adivinhar quando algo estivesse ambíguo (ex.: implementar ou não o streaming).
+- **Priorizar entrega** sobre perfeição: soluções simples e corretas.
 
 ## Gerado pela IA vs. escrito/revisado à mão
 
-_Pergunta-guia: o que veio pronto da IA e o que você escreveu/ajustou?_
-
-- **Gerado pela IA**: a maior parte do código (scaffold, `lib/`, rota da API,
-  `ProductAIWidget`, testes) e a documentação (README, este arquivo).
-- **Revisado/dirigido por mim**: o escopo de cada etapa, as decisões técnicas
-  aprovadas, e a verificação de que cada commit fazia sentido antes de prosseguir.
-- >>PAULO REVISA: seja específico sobre os trechos que você releu/editou à mão<<
+- **Gerado pela IA**: a maior parte do código (scaffold do Next, `lib/`, a rota da
+  API, o `ProductAIWidget`, os testes) e a documentação (README, n8n, este arquivo).
+- **Dirigido/revisado por mim**: o escopo e a ordem das etapas, as decisões
+  técnicas aprovadas a cada commit, e a verificação visual do app rodando com a
+  chave real (testei os 4 produtos e o botão Regenerar).
 
 ## O que corrigi ou rejeitei
 
-_Pergunta-guia: onde a IA errou ou onde você discordou e mudou de rumo?_
-
-- Ajustes reais que surgiram durante a construção:
-  - `jest.config.ts` exigia `ts-node`; trocado por `jest.config.js` (CommonJS)
-    para não adicionar dependência extra.
-  - Os testes precisaram de guards por causa do `noUncheckedIndexedAccess` do
-    TypeScript estrito (acesso indexado a `fetch.mock.calls`).
-- >>PAULO REVISA: acrescente decisões/correções suas (ex.: prompt do LLM, modelo
-  escolhido, algo que você pediu para refazer)<<
+- **`jest.config.ts` → `jest.config.js`**: a config em TypeScript exigia `ts-node`;
+  troquei por CommonJS para não adicionar dependência só para isso.
+- **Guards nos testes**: o TypeScript estrito (`noUncheckedIndexedAccess`) acusou
+  acesso indexado possivelmente `undefined` em `fetch.mock.calls`; ajustei com
+  verificações explícitas em vez de afrouxar o tsconfig.
+- **Streaming não fiado na UI**: optei por deixar o streaming pronto no backend
+  (atrás de `STREAMING_ENABLED`), mas mantive o widget no contrato JSON — consumir
+  JSON parcial no cliente exigiria reescrever o parser sem ganho real para o escopo.
+- **`.env.example` vs `.env`**: por engano colei a chave no `.env.example` (rastreado
+  pelo Git); corrigi movendo para o `.env` (ignorado) e restaurando o exemplo. Bom
+  lembrete de que segredo nunca vai para arquivo versionado.
 
 ## Aprendizados
 
-_Pergunta-guia: o que você tira dessa experiência sobre construir com IA?_
-
-- >>PAULO REVISA: esta seção é a sua voz. Possíveis ganchos do que vivemos aqui:
-  o valor de commits pequenos para revisar a IA; a importância de tipos
-  compartilhados e parse defensivo ao integrar um LLM; e o cuidado com schema de
-  ferramentas (n8n) e segredos (chave do LLM). Reescreva com o que foi real para você.<<
+- **Commits pequenos são o melhor ponto de controle ao programar com IA**: cada
+  etapa fechada e verificável tornou trivial revisar e confiar no que foi gerado.
+- **Tipos compartilhados e parse defensivo são essenciais ao integrar um LLM**: a
+  saída do modelo é texto, não um contrato; centralizar tipos entre front e back e
+  validar a resposta (formato dos bullets/FAQs) evita que conteúdo inválido vaze
+  para a interface.
+- **Cuidado com segredos e com schema de ferramentas externas**: a chave do LLM
+  fica só no `.env`; e o JSON do n8n varia entre versões, então documentei o passo
+  a passo de validação em vez de prometer um import 100% automático.
