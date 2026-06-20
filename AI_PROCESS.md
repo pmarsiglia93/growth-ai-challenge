@@ -25,10 +25,13 @@ Relato honesto de como construí este projeto com apoio de IA.
 ## Gerado pela IA vs. escrito/revisado à mão
 
 - **Gerado pela IA**: a maior parte do código (scaffold do Next, `lib/`, a rota da
-  API, o `ProductAIWidget`, os testes) e a documentação (README, n8n, este arquivo).
+  API, o `ProductAIWidget`, os testes, o suporte a pt-BR/en e os fluxos n8n) e a
+  documentação (README, n8n, este arquivo). O projeto cobre os obrigatórios e os
+  cinco diferenciais (testes, tipagem forte, streaming, multi-idioma e 2º fluxo n8n).
 - **Dirigido/revisado por mim**: o escopo e a ordem das etapas, as decisões
-  técnicas aprovadas a cada commit, e a verificação visual do app rodando com a
-  chave real (testei os 4 produtos e o botão Regenerar).
+  técnicas aprovadas a cada commit, e a verificação do app rodando com a chave real
+  — testei os 4 produtos, o botão Regenerar e o toggle PT/EN, e validei os caminhos
+  400/500 da API.
 
 ## O que corrigi ou rejeitei
 
@@ -43,6 +46,11 @@ Relato honesto de como construí este projeto com apoio de IA.
 - **`.env.example` vs `.env`**: por engano colei a chave no `.env.example` (rastreado
   pelo Git); corrigi movendo para o `.env` (ignorado) e restaurando o exemplo. Bom
   lembrete de que segredo nunca vai para arquivo versionado.
+- **Exatidão dos dados**: ao cruzar o `products.json` com a spec oficial, achei uma
+  divergência de acento ("ergonómicas" vs "ergonômicas") e corrigi — o desafio pede
+  "usar exatamente estes dados".
+- **Cache por idioma**: ao adicionar pt-BR/en, percebi que o cache por `productId`
+  devolveria o idioma errado ao trocar; ajustei a chave para `productId + locale`.
 
 ## Aprendizados
 
