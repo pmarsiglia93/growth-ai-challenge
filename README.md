@@ -70,13 +70,17 @@ Webhook (POST /webhook/produto)
 O nó HTTP usa **Continue On Fail** (`onError: continueRegularOutput`) + `neverError`,
 então erros 4xx/5xx da API não derrubam o fluxo: caem no ramo `false` do IF.
 
-### Honestidade sobre o schema
+### Validação e ressalva de versão
 
-O schema interno dos nós do n8n **muda entre versões** (campos, `typeVersion`,
-formato de `conditions`). O `flow.json` aqui foi escrito para uma versão recente
-do n8n e pode precisar de pequenos ajustes na sua instalação. Trate-o como um
-ponto de partida e valide na UI. Se algum nó importar "quebrado", remonte-o pela
-interface (a lógica é simples) e reexporte por cima.
+Este fluxo foi **testado ao vivo** numa versão recente do n8n: importado via CLI
+(`n8n import:workflow`), webhook ativado e disparado de verdade — os ramos de
+**sucesso** (com `bullets`/`faqs`) e de **erro** (falha tratada) funcionaram ponta
+a ponta contra a API em `localhost:3000`.
+
+Ressalva honesta: o schema interno dos nós do n8n **muda entre versões** (campos,
+`typeVersion`, formato de `conditions`). Em uma instalação muito antiga (n8n pré-1.0)
+algum nó pode importar com aviso de versão — nesse caso, reabra o nó na UI, confirme
+a operação e salve (a lógica é simples). Em n8n 1.x atual, importa e roda sem ajustes.
 
 ### Passo a passo
 

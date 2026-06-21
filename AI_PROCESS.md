@@ -30,8 +30,9 @@ Relato honesto de como construí este projeto com apoio de IA.
   cinco diferenciais (testes, tipagem forte, streaming, multi-idioma e 2º fluxo n8n).
 - **Dirigido/revisado por mim**: o escopo e a ordem das etapas, as decisões
   técnicas aprovadas a cada commit, e a verificação do app rodando com a chave real
-  — testei os 4 produtos, o botão Regenerar e o toggle PT/EN, e validei os caminhos
-  400/500 da API.
+  — testei os 4 produtos, o botão Regenerar e o toggle PT/EN, validei os caminhos
+  400/500 da API e rodei os fluxos n8n ao vivo (import via CLI + disparo do webhook
+  nos ramos de sucesso e de erro).
 
 ## O que corrigi ou rejeitei
 
@@ -51,6 +52,9 @@ Relato honesto de como construí este projeto com apoio de IA.
   "usar exatamente estes dados".
 - **Cache por idioma**: ao adicionar pt-BR/en, percebi que o cache por `productId`
   devolveria o idioma errado ao trocar; ajustei a chave para `productId + locale`.
+- **ESLint não configurado**: numa auditoria final, `npm run lint` caía num prompt
+  interativo por falta de config. Adicionei `.eslintrc.json` (`next/core-web-vitals`)
+  e as devDependencies — sem tocar em código; o lint passou limpo de primeira.
 
 ## Aprendizados
 
