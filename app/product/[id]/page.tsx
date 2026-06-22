@@ -1,10 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProductById } from "@/lib/products";
+import { ArrowLeft } from "lucide-react";
+import { getAllProducts, getProductById } from "@/lib/products";
 import ProductAIWidget from "@/components/ProductAIWidget";
+import { Badge } from "@/components/ui/badge";
 
 interface ProductPageProps {
   params: { id: string };
+}
+
+/** Pré-renderiza as 4 páginas de produto como estáticas (melhora TTFB/LCP). */
+export function generateStaticParams() {
+  return getAllProducts().map((product) => ({ id: product.id }));
 }
 
 export default function ProductPage({ params }: ProductPageProps) {
@@ -16,27 +23,25 @@ export default function ProductPage({ params }: ProductPageProps) {
 
   return (
     <div>
-      <Link href="/" className="text-sm text-blue-600 hover:underline">
-        ← Voltar ao catálogo
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1 text-sm font-medium text-violet-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
+      >
+        <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+        Voltar ao catálogo
       </Link>
 
-      <h1 className="mt-4 text-2xl font-bold">{product.title}</h1>
-
-      {/* Dados crus do produto */}
-      <dl className="mt-4 space-y-2 rounded-lg border border-gray-200 bg-white p-4 text-sm">
-        <div>
-          <dt className="font-medium text-gray-500">ID</dt>
-          <dd>{product.id}</dd>
-        </div>
-        <div>
-          <dt className="font-medium text-gray-500">Categoria</dt>
-          <dd>{product.category}</dd>
-        </div>
-        <div>
-          <dt className="font-medium text-gray-500">Descrição</dt>
-          <dd>{product.description}</dd>
-        </div>
-      </dl>
+      {/* Produto como herói */}
+      <header className="mt-5">
+        <Badge variant="secondary">{product.category}</Badge>
+        <h1 className="mt-3 text-3xl font-bold tracking-tight">
+          {product.title}
+        </h1>
+        <p className="mt-3 max-w-2xl leading-relaxed text-slate-600">
+          {product.description}
+        </p>
+        <p className="mt-2 text-xs text-slate-400">ID do produto: {product.id}</p>
+      </header>
 
       <ProductAIWidget
         productId={product.id}
