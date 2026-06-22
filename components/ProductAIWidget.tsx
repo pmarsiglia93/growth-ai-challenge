@@ -1,12 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  Check,
+  RefreshCw,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 import type {
   ApiError,
   EnrichRequest,
   EnrichResult,
   Locale,
 } from "@/lib/types";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 /** Rótulos da UI por idioma. */
 const UI_TEXT: Record<Locale, {
@@ -129,87 +146,138 @@ export default function ProductAIWidget({
     return () => controller.abort();
   }, [fetchEnrichment]);
 
+  const isLoading = state.status === "loading";
+
   return (
-    <section className="mt-6 rounded-lg border border-gray-200 bg-white p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{t.heading}</h2>
+    <Card className="mt-6 overflow-hidden">
+      <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-slate-100 bg-slate-50/60">
+        <div className="flex items-center gap-2">
+          <CardTitle>{t.heading}</CardTitle>
+          <Badge variant="ai">
+            <Sparkles aria-hidden="true" className="h-3 w-3" />
+            {locale === "en" ? "AI-enriched" : "Enriquecido por IA"}
+          </Badge>
+        </div>
         <div className="flex gap-1" role="group" aria-label="Idioma / Language">
           {(["pt-BR", "en"] as const).map((lang) => (
-            <button
+            <Button
               key={lang}
               type="button"
+              size="sm"
+              variant={locale === lang ? "default" : "outline"}
               onClick={() => setLocale(lang)}
               aria-pressed={locale === lang}
-              className={`rounded-md border px-2 py-1 text-xs font-medium ${
-                locale === lang
-                  ? "border-gray-800 bg-gray-800 text-white"
-                  : "border-gray-300 hover:bg-gray-50"
-              }`}
+              disabled={isLoading}
             >
               {lang === "pt-BR" ? "PT" : "EN"}
-            </button>
+            </Button>
           ))}
         </div>
-      </div>
+      </CardHeader>
 
-      {state.status === "loading" && <WidgetSkeleton label={t.loading} />}
+      <CardContent className="pt-6">
+        {state.status === "loading" && <WidgetSkeleton label={t.loading} />}
 
-      {state.status === "error" && (
-        <div className="mt-4">
-          <p className="text-sm text-red-600">{state.message}</p>
-          <button
-            type="button"
-            onClick={() => void fetchEnrichment(false)}
-            className="mt-3 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
-          >
-            {t.retry}
-          </button>
-        </div>
-      )}
-
-      {state.status === "success" && (
-        <div className="mt-4 space-y-6">
-          <div>
-            <h3 className="text-sm font-medium text-gray-500">{t.benefits}</h3>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-              {state.data.bullets.map((bullet, index) => (
-                <li key={index}>{bullet}</li>
-              ))}
-            </ul>
+        {state.status === "error" && (
+          <div className="flex flex-col items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
+            <div className="flex items-center gap-2 text-red-700">
+              <AlertTriangle aria-hidden="true" className="h-5 w-5 shrink-0" />
+              <p className="text-sm font-medium">{state.message}</p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void fetchEnrichment(false)}
+            >
+              <RotateCcw aria-hidden="true" className="h-4 w-4" />
+              {t.retry}
+            </Button>
           </div>
+        )}
 
-          <div>
-            <h3 className="text-sm font-medium text-gray-500">{t.faq}</h3>
-            <dl className="mt-2 space-y-3">
-              {state.data.faqs.map((faq, index) => (
-                <div key={index}>
-                  <dt className="text-sm font-medium">{faq.question}</dt>
-                  <dd className="mt-0.5 text-sm text-gray-700">{faq.answer}</dd>
-                </div>
-              ))}
-            </dl>
+        {state.status === "success" && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {t.benefits}
+              </h3>
+              <ul className="space-y-2.5">
+                {state.data.bullets.map((bullet, index) => (
+                  <li key={index} className="flex items-start gap-2.5 text-sm">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                      <Check aria-hidden="true" className="h-3 w-3" />
+                    </span>
+                    <span className="leading-relaxed">{bullet}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {t.faq}
+              </h3>
+              <Accordion
+                type="single"
+                collapsible
+                defaultValue="faq-0"
+                className="w-full"
+              >
+                {state.data.faqs.map((faq, index) => (
+                  <AccordionItem key={index} value={`faq-${index}`}>
+                    <AccordionTrigger>{faq.question}</AccordionTrigger>
+                    <AccordionContent>
+                      <span className="leading-relaxed">{faq.answer}</span>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void fetchEnrichment(true)}
+              disabled={isLoading}
+            >
+              <RefreshCw aria-hidden="true" className="h-4 w-4" />
+              {t.regenerate}
+            </Button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => void fetchEnrichment(true)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
-          >
-            {t.regenerate}
-          </button>
-        </div>
-      )}
-    </section>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
 function WidgetSkeleton({ label }: { label: string }) {
   return (
-    <div className="mt-4 animate-pulse space-y-3" aria-label={label}>
-      <div className="h-3 w-1/3 rounded bg-gray-200" />
-      <div className="h-3 w-full rounded bg-gray-200" />
-      <div className="h-3 w-5/6 rounded bg-gray-200" />
-      <div className="h-3 w-2/3 rounded bg-gray-200" />
+    <div className="space-y-6" role="status" aria-label={label} aria-busy="true">
+      {/* Bloco de benefícios */}
+      <div className="space-y-2.5">
+        <Skeleton className="h-3 w-24" />
+        <div className="flex items-center gap-2.5">
+          <Skeleton className="h-5 w-5 rounded-full" />
+          <Skeleton className="h-3 w-full" />
+        </div>
+        <div className="flex items-center gap-2.5">
+          <Skeleton className="h-5 w-5 rounded-full" />
+          <Skeleton className="h-3 w-5/6" />
+        </div>
+        <div className="flex items-center gap-2.5">
+          <Skeleton className="h-5 w-5 rounded-full" />
+          <Skeleton className="h-3 w-2/3" />
+        </div>
+      </div>
+      {/* Bloco de FAQ */}
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-32" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
+      </div>
     </div>
   );
 }

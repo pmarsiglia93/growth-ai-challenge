@@ -1,3 +1,16 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
+  /* Foco visível e consistente para acessibilidade. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-slate-500 ring-offset-2;
+  }
+  ::selection {
+    @apply bg-violet-200;
+  }
+}
