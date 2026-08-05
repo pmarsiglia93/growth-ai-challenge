@@ -124,6 +124,8 @@ export default function ProductAIWidget({
       typeof navigator !== "undefined" &&
       navigator.language.toLowerCase().startsWith("en")
     ) {
+      // A leitura client-only evita divergência de hidratação no HTML inicial.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocale("en");
     }
   }, []);
@@ -163,18 +165,26 @@ export default function ProductAIWidget({
         if (!isStreamEvent(event) || !isCurrent()) return false;
 
         if (event.type === "bullet") {
-          // O servidor emite índices contíguos. Ignorar repetidos ou fora de
-          // ordem impede duplicação caso um intermediário repita uma linha.
-          if (event.index !== partial.bullets.length || event.index >= 3) {
+          // O mesmo índice recebe snapshots acumulados para revelar o texto
+          // palavra a palavra; o índice seguinte só pode ser anexado em ordem.
+          if (event.index >= 3 || event.index > partial.bullets.length) {
             return false;
           }
-          partial = { ...partial, bullets: [...partial.bullets, event.value] };
+          const bullets = [...partial.bullets];
+          if (event.index === bullets.length) bullets.push(event.value);
+          else if (event.index === bullets.length - 1) bullets[event.index] = event.value;
+          else return false;
+          partial = { ...partial, bullets };
           setState({ status: "streaming", partial });
         } else if (event.type === "faq") {
-          if (event.index !== partial.faqs.length || event.index >= 3) {
+          if (event.index >= 3 || event.index > partial.faqs.length) {
             return false;
           }
-          partial = { ...partial, faqs: [...partial.faqs, event.value] };
+          const faqs = [...partial.faqs];
+          if (event.index === faqs.length) faqs.push(event.value);
+          else if (event.index === faqs.length - 1) faqs[event.index] = event.value;
+          else return false;
+          partial = { ...partial, faqs };
           setState({ status: "streaming", partial });
         } else if (event.type === "done") {
           settled = true;
@@ -294,6 +304,8 @@ export default function ProductAIWidget({
 
   // Dispara no mount, e refaz se o produto ou o idioma mudar. Aborta ao desmontar.
   useEffect(() => {
+    // O efeito sincroniza o componente com a API e a função cuida do cancelamento.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchEnrichment(false);
     return () => {
       requestSequenceRef.current += 1;
@@ -311,22 +323,30 @@ export default function ProductAIWidget({
         : null;
 
   return (
-    <Card className="mt-6 overflow-hidden">
-      <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-slate-100 bg-slate-50/60">
-        <div className="flex items-center gap-2">
+    <Card
+      lang={locale === "en" ? "en" : "pt-BR"}
+      className="mt-6 overflow-hidden"
+    >
+      <CardHeader className="flex-col items-stretch gap-3 space-y-0 border-b border-slate-100 bg-slate-50/60 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <CardTitle>{t.heading}</CardTitle>
           <Badge variant="ai">
             <Sparkles aria-hidden="true" className="h-3 w-3" />
             {locale === "en" ? "AI-enriched" : "Enriquecido por IA"}
           </Badge>
         </div>
-        <div className="flex gap-1" role="group" aria-label="Idioma / Language">
+        <div
+          className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:gap-1"
+          role="group"
+          aria-label="Idioma / Language"
+        >
           {(["pt-BR", "en"] as const).map((lang) => (
             <Button
               key={lang}
               type="button"
               size="sm"
               variant={locale === lang ? "default" : "outline"}
+              className="w-full sm:w-auto"
               onClick={() => setLocale(lang)}
               aria-pressed={locale === lang}
             >

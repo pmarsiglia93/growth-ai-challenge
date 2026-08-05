@@ -342,7 +342,7 @@ describe("POST /api/enrich-product — streaming NDJSON", () => {
     process.env.STREAMING_ENABLED = "true";
   });
 
-  it("responde NDJSON com um evento por bullet/FAQ e um 'done' final", async () => {
+  it("responde NDJSON palavra a palavra e fecha com um 'done' final", async () => {
     // O JSON chega picotado, como num stream real.
     mockStream.mockReturnValue(
       llmStream([
@@ -359,8 +359,14 @@ describe("POST /api/enrich-product — streaming NDJSON", () => {
     expect(response.headers.get("content-type")).toBe("application/x-ndjson");
 
     const events = await readEvents(response);
-    expect(events.filter((e) => e.type === "bullet")).toHaveLength(2);
-    expect(events.filter((e) => e.type === "faq")).toHaveLength(3);
+    const bulletEvents = events.filter((e) => e.type === "bullet");
+    const faqEvents = events.filter((e) => e.type === "faq");
+    expect(bulletEvents.length).toBeGreaterThan(2);
+    expect(faqEvents.length).toBeGreaterThanOrEqual(3);
+    expect(bulletEvents.filter((event) => event.index === 0).map((event) => event.value)).toEqual([
+      "Bullet",
+      "Bullet um",
+    ]);
 
     const last = events[events.length - 1];
     expect(last?.type).toBe("done");

@@ -48,6 +48,25 @@ function hasJsonContentType(request: Request): boolean {
   return mediaType === "application/json";
 }
 
+/**
+ * Gera snapshots acumulados por palavra ("Um" → "Um benefício" → ...).
+ * Cada snapshot vira um chunk NDJSON, tornando o efeito palavra a palavra
+ * observável no navegador sem expor a sintaxe JSON produzida pelo modelo.
+ */
+function wordSnapshots(value: string): string[] {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  return words.map((_, index) => words.slice(0, index + 1).join(" "));
+}
+
+const WORD_REVEAL_DELAY_MS = process.env.NODE_ENV === "test" ? 0 : 18;
+
+async function waitBetweenWords(): Promise<void> {
+  if (WORD_REVEAL_DELAY_MS === 0) return;
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, WORD_REVEAL_DELAY_MS);
+  });
+}
+
 /** Requisição já validada: os campos opcionais viraram valores concretos. */
 type ValidatedRequest = Required<EnrichRequest>;
 
@@ -185,19 +204,28 @@ function streamEnrichment(
 
             // Reparseia o JSON parcial e emite apenas o que ainda não foi enviado.
             const partial = extractPartial(accumulated);
-            for (; sentBullets < partial.bullets.length; sentBullets++) {
-              send({
-                type: "bullet",
-                index: sentBullets,
-                value: partial.bullets[sentBullets]!,
-              });
+            while (sentBullets < partial.bullets.length) {
+              const index = sentBullets;
+              for (const value of wordSnapshots(partial.bullets[index]!)) {
+                if (cancelled) break;
+                send({ type: "bullet", index, value });
+                await waitBetweenWords();
+              }
+              sentBullets++;
             }
-            for (; sentFaqs < partial.faqs.length; sentFaqs++) {
-              send({
-                type: "faq",
-                index: sentFaqs,
-                value: partial.faqs[sentFaqs]!,
-              });
+            while (sentFaqs < partial.faqs.length) {
+              const index = sentFaqs;
+              const faq = partial.faqs[index]!;
+              for (const answer of wordSnapshots(faq.answer)) {
+                if (cancelled) break;
+                send({
+                  type: "faq",
+                  index,
+                  value: { question: faq.question, answer },
+                });
+                await waitBetweenWords();
+              }
+              sentFaqs++;
             }
           }
 

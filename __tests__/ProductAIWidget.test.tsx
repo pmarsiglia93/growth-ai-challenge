@@ -274,6 +274,27 @@ describe("ProductAIWidget — modo JSON", () => {
     expect(
       screen.getByRole("button", { name: "Regenerate" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("AI Enrichment").closest("[lang='en']")).not.toBeNull();
+  });
+
+  it("mantém o seletor de idioma responsivo em telas estreitas", async () => {
+    global.fetch = jest.fn(async () => jsonResponse(sampleResult));
+
+    render(<ProductAIWidget {...props} />);
+    await screen.findByText("Amortecimento confortável");
+
+    const languageGroup = screen.getByRole("group", {
+      name: "Idioma / Language",
+    });
+    expect(languageGroup).toHaveClass("grid", "grid-cols-2", "sm:flex");
+    expect(screen.getByRole("button", { name: "PT" })).toHaveClass(
+      "w-full",
+      "sm:w-auto",
+    );
+    expect(screen.getByRole("button", { name: "EN" })).toHaveClass(
+      "w-full",
+      "sm:w-auto",
+    );
   });
 
   it("(i) aborta a requisição em voo ao desmontar, sem atualizar o estado depois", async () => {
@@ -367,6 +388,28 @@ describe("ProductAIWidget — modo JSON", () => {
 });
 
 describe("ProductAIWidget — modo streaming (NDJSON)", () => {
+  it("atualiza o mesmo item com snapshots palavra a palavra", async () => {
+    const stream = ndjsonResponse();
+    global.fetch = jest.fn(async () => stream.response) as unknown as typeof fetch;
+
+    render(<ProductAIWidget {...props} />);
+
+    await stream.push({ type: "bullet", index: 0, value: "Amortecimento" });
+    expect(await screen.findByText("Amortecimento")).toBeInTheDocument();
+
+    await stream.push({
+      type: "bullet",
+      index: 0,
+      value: "Amortecimento confortável",
+    });
+    expect(await screen.findByText("Amortecimento confortável")).toBeInTheDocument();
+    expect(screen.queryByText("Amortecimento")).not.toBeInTheDocument();
+
+    await stream.push({ type: "done", result: sampleResult });
+    await stream.close();
+    expect(await screen.findByText(sampleResult.bullets[1]!)).toBeInTheDocument();
+  });
+
   it("(k) renderiza bullets e FAQs progressivamente e fecha com o resultado final", async () => {
     const stream = ndjsonResponse();
     global.fetch = jest.fn(async () => stream.response) as unknown as typeof fetch;

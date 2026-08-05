@@ -12,8 +12,9 @@ import {
  * Next e de consumir no browser (split por "\n"), sem o overhead de `event:`/
  * `data:` do SSE nem a necessidade de `EventSource` (que não faz POST).
  *
- * Ordem típica: N x `bullet` → 3 x `faq` → `done`. Um `error` pode substituir
- * o `done` se a geração falhar no meio do stream.
+ * Ordem típica: snapshots de `bullet` → snapshots de `faq` → `done`. Eventos
+ * com o mesmo índice substituem o snapshot anterior para revelar palavra a palavra.
+ * Um `error` pode substituir o `done` se a geração falhar no meio do stream.
  */
 export type StreamEvent =
   | { type: "bullet"; index: number; value: string }
