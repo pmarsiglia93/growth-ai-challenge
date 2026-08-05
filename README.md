@@ -9,15 +9,28 @@ descrição), chama um LLM da Anthropic e gera **2–3 bullets de benefícios** 
 - **Catálogo** (`/`) lista 4 produtos de `data/products.json`.
 - **Página de produto** (`/product/[id]`) mostra os dados crus e o widget de IA.
 - **`ProductAIWidget`** (client) faz `POST /api/enrich-product` no mount, com
-  estados explícitos (loading / success / error) e botão **Regenerar**.
+  estados explícitos (loading / streaming / success / error) e botão **Regenerar**.
 - **`/api/enrich-product`** valida o body, consulta um cache em memória, chama o
-  LLM via `@anthropic-ai/sdk`, faz parse defensivo do JSON e devolve o resultado.
+  LLM via `@anthropic-ai/sdk`, faz parse defensivo do JSON e devolve o resultado
+  — em **streaming NDJSON** (default) ou em JSON de uma vez só.
 
 ### Stack
 
 - Next.js 14 (App Router) + React 18 + TypeScript em modo estrito (zero `any` no backend).
 - Tailwind CSS (visual simples — não é o foco da avaliação).
-- LLM: Anthropic via SDK oficial (`anthropic.messages.create`).
+- LLM: Anthropic via SDK oficial (`anthropic.messages.create` / `.stream`).
+
+### Status dos diferenciais
+
+| Diferencial | Status |
+| ----------- | ------ |
+| Testes automatizados | Implementado (72 testes de widget, API, protocolo e cache) |
+| Tipagem forte no backend | Implementado (`strict` + `noUncheckedIndexedAccess`, zero `any`) |
+| Streaming com `ReadableStream` | Implementado ponta a ponta (NDJSON, server → UI) |
+| Suporte a `pt-BR` e `en` | Implementado (toggle + cache por idioma) |
+| 2º fluxo n8n com `Schedule Trigger` | Implementado (`n8n/flow-schedule.json`) |
+
+Limitações conhecidas estão listadas no fim deste arquivo.
 
 ## Pré-requisitos
 
@@ -27,8 +40,8 @@ descrição), chama um LLM da Anthropic e gera **2–3 bullets de benefícios** 
 ## Como rodar local
 
 ```bash
-# 1. Instalar dependências
-npm install
+# 1. Instalar exatamente as dependências do lockfile
+npm ci
 
 # 2. Criar o .env a partir do exemplo e preencher a chave
 cp .env.example .env
@@ -43,17 +56,41 @@ npm run dev
 
 Variáveis de ambiente (ver `.env.example`):
 
-| Variável            | Default                        | Descrição                                  |
-| ------------------- | ------------------------------ | ------------------------------------------ |
-| `ANTHROPIC_API_KEY` | —                              | Chave da Anthropic (obrigatória).          |
-| `LLM_MODEL`         | `claude-haiku-4-5-20251001`    | Modelo do LLM (trocável por sonnet/opus).  |
-| `STREAMING_ENABLED` | `false`                        | Reservado para o modo streaming opcional.  |
+| Variável            | Default                     | Descrição                                                        |
+| ------------------- | --------------------------- | ---------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY` | —                           | Chave da Anthropic (obrigatória).                                  |
+| `LLM_MODEL`         | `claude-haiku-4-5-20251001` | Modelo do LLM (trocável por sonnet/opus).                          |
+| `STREAMING_ENABLED` | `true`                      | Kill switch do streaming: `false` faz a rota sempre responder JSON. |
 
-### Testes
+> O streaming só é usado quando o cliente pede `Accept: application/x-ndjson`
+> (o widget pede; o n8n e um `curl` comum, não). Consumidores que esperam JSON
+> continuam recebendo JSON, sem configuração extra.
+
+### Testes, lint, tipagem e build
 
 ```bash
-npm test
+npm test          # Jest + Testing Library (72 testes, nenhuma chamada real de API)
+npm run lint      # ESLint (next/core-web-vitals)
+npm run typecheck # tsc --noEmit
+npm run build     # build de produção
 ```
+
+### Como conferir cada requisito manualmente
+
+Com `npm run dev` no ar:
+
+| O quê | Como |
+| ----- | ---- |
+| Catálogo | `http://localhost:3000` — 4 produtos |
+| Páginas de produto | `/product/001` … `/product/004` |
+| Produto inexistente | `/product/999` → página "Produto não encontrado" (404) |
+| Geração + streaming | abra um produto: os benefícios e as FAQs aparecem um a um |
+| Regeneração | botão **Regenerar** — o conteúdo muda (cache invalidado antes) |
+| Cache | recarregue a página: a 2ª carga é instantânea (JSON do cache) |
+| Idioma | toggle **PT/EN** no cabeçalho do widget |
+| Método errado | `curl -i http://localhost:3000/api/enrich-product` → `405` |
+| Payload inválido | `curl -X POST .../api/enrich-product -H 'Content-Type: application/json' -d '{"productId":"001"}'` → `400` |
+| Sem chave | `ANTHROPIC_API_KEY= npm run dev` → o widget mostra a mensagem de erro |
 
 ## Como rodar e importar o fluxo n8n
 
@@ -72,15 +109,16 @@ então erros 4xx/5xx da API não derrubam o fluxo: caem no ramo `false` do IF.
 
 ### Validação e ressalva de versão
 
-Este fluxo foi **testado ao vivo** numa versão recente do n8n: importado via CLI
-(`n8n import:workflow`), webhook ativado e disparado de verdade — os ramos de
-**sucesso** (com `bullets`/`faqs`) e de **erro** (falha tratada) funcionaram ponta
-a ponta contra a API em `localhost:3000`.
+O histórico do projeto registra uma validação ao vivo anterior numa versão 1.x
+do n8n (import via CLI e disparo dos ramos de sucesso e erro). Na auditoria final
+atual, o executável do n8n não estava instalado: os dois arquivos foram parseados
+como JSON e revisados estruturalmente, mas não reexecutados. Por isso, siga o teste
+abaixo no ambiente n8n que será usado na avaliação.
 
 Ressalva honesta: o schema interno dos nós do n8n **muda entre versões** (campos,
 `typeVersion`, formato de `conditions`). Em uma instalação muito antiga (n8n pré-1.0)
 algum nó pode importar com aviso de versão — nesse caso, reabra o nó na UI, confirme
-a operação e salve (a lógica é simples). Em n8n 1.x atual, importa e roda sem ajustes.
+a operação e salve. Na versão 1.x registrada no histórico, rodou sem ajustes.
 
 ### Passo a passo
 
@@ -129,32 +167,21 @@ agora (não precisa esperar o agendamento). O app Next precisa estar rodando.
 
 ## Como eu integraria isso em produção (VTEX IO)
 
-Em produção na **VTEX IO**, eu empacotaria isto como um app próprio
-(`vendor.product-ai-widget`) com front e backend no mesmo projeto:
-
-- **Front (`react/`)**: o `ProductAIWidget` vira um bloco React do app. Declaro o
-  bloco em `store/interfaces.json` (`"product-ai-widget": { "component": "ProductAIWidget" }`)
-  e o plugo dentro de `store.product` no `blocks.json` do tema, perto do bloco de
-  descrição do produto.
-- **Contexto de produto**: em vez de receber props da página, o componente lê o
-  contexto do tema com `useProduct()` (`vtex.product-context`), de onde tiro
-  `productId`, `productName`, `description` e `categories` — sem passar dados à mão.
-- **Backend de enrich**: a lógica de `lib/enrich.ts` roda num **serviço Node do
-  próprio app** (`node/`, service VTEX IO) exposto como rota, e o front chama via o
-  runtime `vtex.io`. Um middleware/serviço externo também é viável se eu quiser
-  desacoplar escala/observabilidade do ciclo de deploy do app.
-- **Cache**: o `Map` em memória vira **VBase** (KV nativo do IO) por `productId`,
-  com TTL — sobrevive a cold starts, ao contrário do cache em memória atual.
-- **Chave do LLM**: nunca no front. Fica como **app settings/secret da VTEX**
-  (`manifest.json` → `settingsSchema`), lida apenas no service via `ctx`/`process.env`,
-  nunca exposta no bundle do navegador.
+- Criaria um app `vendor.product-ai-widget`: `manifest.json` declara versão, dependências e os builders `react`, `store` e `node`.
+- Em `react/`, o widget vira um componente registrado como bloco em `store/interfaces.json` e incluído no template `store.product` do tema.
+- O bloco usa `useProduct()` de `vtex.product-context` para obter ID, nome, descrição e categoria; props ficam como fallback configurável.
+- Em `node/`, um service expõe a rota interna de enriquecimento; as policies do `manifest.json` limitam somente os hosts e recursos necessários.
+- A chave do LLM fica em app settings/secret do workspace e é lida apenas pelo service, nunca pelo app React ou pelo bundle do navegador.
+- O `Map` vira VBase/Redis com TTL e chave por produto+idioma; logs estruturados, métricas de latência/cache/erro e tracing cobrem a observabilidade.
+- Depois de validar em workspace de desenvolvimento, publicaria com VTEX Toolbelt, promoveria a versão estável e instalaria o app nas contas desejadas.
 
 ## Decisões técnicas e por quê
 
 - **App Router (Next 14).** A rota de API (`app/api/.../route.ts`) e as páginas
   Server/Client convivem no mesmo projeto; o widget é o único client component.
 - **Cache em memória + invalidação no regenerate.** Um `Map` em escopo de módulo
-  guarda o resultado por `productId`. Sem `regenerate`, serve do cache (rápido);
+  guarda uma cópia do resultado por `productId + locale`. Sem `regenerate`, serve
+  do cache (rápido);
   com `regenerate`, o cache é invalidado **antes** de gerar — caso contrário o
   botão "Regenerar" devolveria sempre o mesmo conteúdo.
 - **Parse defensivo do JSON do LLM.** Removemos eventuais cercas ```` ```json ````,
@@ -169,18 +196,68 @@ Em produção na **VTEX IO**, eu empacotaria isto como um app próprio
   oferece um toggle **PT/EN**; o `locale` vai no corpo da requisição e o prompt
   instrui o idioma de saída. O **cache é chaveado por `productId + locale`** —
   sem isso, trocar de idioma devolveria o conteúdo cacheado no idioma errado.
-- **Streaming opcional, desligado por padrão.** Com `STREAMING_ENABLED=false`
-  (default) a rota responde JSON normalmente. Com `STREAMING_ENABLED=true`, no
-  cache miss ela responde via `ReadableStream` (os deltas de texto do modelo) e,
-  ao final, valida o JSON acumulado e grava no cache. O `ProductAIWidget`
-  permanece no contrato JSON — o streaming está pronto no backend mas **não está
-  fiado na UI** (consumir JSON parcial no cliente exigiria reescrever o parser do
-  widget, complexidade sem ganho para este escopo). Para testar o stream:
+- **Streaming real via NDJSON (ligado por padrão).** No cache miss a rota devolve
+  um `ReadableStream` com **NDJSON** — uma linha por evento:
+
+  ```
+  {"type":"bullet","index":0,"value":"..."}
+  {"type":"faq","index":0,"value":{"question":"...","answer":"..."}}
+  {"type":"done","result":{"bullets":[...],"faqs":[...]}}
+  ```
+
+  Escolhi NDJSON em vez de SSE porque é trivial de produzir num `ReadableStream`
+  do Next e de consumir no browser (`split("\n")`), sem o overhead de `event:`/
+  `data:` nem o `EventSource` (que não faz `POST`).
+
+  O formato é **negociado pelo header `Accept`**: só quem pede
+  `application/x-ndjson` recebe stream. Foi assim que evitei quebrar os
+  consumidores não-browser — o fluxo n8n e um `curl` comum continuam recebendo o
+  JSON completo, sem parâmetro extra no corpo nem variável de ambiente diferente.
+
+  O servidor **reparseia o JSON parcial do modelo a cada delta**
+  (`lib/stream-protocol.ts`) e emite cada bullet/FAQ assim que ele fecha — não é
+  um JSON pronto fatiado artificialmente: o conteúdo chega enquanto o modelo
+  ainda está escrevendo. O evento `done` carrega o resultado completo já
+  validado, que é o que vai para o cache e para o estado final tipado da UI.
+
+  No cliente, o `ProductAIWidget` decide pelo `Content-Type`: `application/x-ndjson`
+  → lê `response.body` com `ReadableStreamDefaultReader` + `TextDecoder`,
+  processando linha a linha e guardando chunks incompletos; qualquer outro →
+  `response.json()`. Por isso **os dois modos funcionam**, e um cache hit (que
+  sempre responde JSON) também. Erros: antes do primeiro byte viram HTTP 4xx/5xx
+  normais; depois, viram um evento `{"type":"error"}` — em ambos os casos a UI
+  mostra a mesma mensagem amigável com botão de repetir.
+
+  Para ver o stream cru:
 
   ```bash
-  STREAMING_ENABLED=true npm run dev
-  # noutro terminal:
+  npm run dev
+  # noutro terminal (o Accept é o que liga o stream):
   curl -N -X POST http://localhost:3000/api/enrich-product \
     -H "Content-Type: application/json" \
+    -H "Accept: application/x-ndjson" \
     -d '{"productId":"001","productTitle":"Tênis Running Pro X200","productDescription":"Tênis de corrida com amortecimento EVA duplo.","category":"Calçados Esportivos"}'
   ```
+
+## Limitações conhecidas
+
+- **Cache é um `Map` em memória, sem TTL nem limite de tamanho.** Some a cada
+  restart/cold start e não é compartilhado entre instâncias. Em produção seria
+  Redis/VBase (ver a seção VTEX acima).
+- **Sem persistência e sem rate limiting.** A rota é aberta: qualquer cliente
+  pode disparar gerações e, portanto, custo de LLM. Num ambiente real entraria
+  rate limit por IP/sessão e autenticação.
+- **A qualidade do conteúdo depende do modelo.** Há validação de *forma*
+  (2–3 bullets, exatamente 3 FAQs, tipos), não de *veracidade* — o prompt pede
+  para não inventar especificações, mas isso não é garantia formal.
+- **Uma resposta inválida do LLM vira erro, sem retry.** Não há reprocessamento
+  automático nem fallback para outro modelo; o usuário clica em "Tentar novamente".
+- **O idioma é escolhido no cliente** (`navigator.language` + toggle). Não há
+  rotas `/pt-BR` e `/en` nem i18n de rota — só o conteúdo do widget é traduzido;
+  o resto da página está em português.
+- **`n8n/*.json` depende da versão do n8n.** Há registro de validação anterior
+  em n8n 1.x, mas a auditoria atual foi estrutural; outra versão pode pedir ajuste
+  de `typeVersion` (detalhes na seção do n8n).
+- **A verificação do streaming no navegador foi feita via testes automatizados**
+  (com `ReadableStream` real) **e via cliente HTTP contra dev e produção**; não há
+  teste de browser end-to-end (Playwright/Cypress) no projeto.
