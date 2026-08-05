@@ -6,7 +6,7 @@ import ProductAIWidget from "@/components/ProductAIWidget";
 import { Badge } from "@/components/ui/badge";
 
 interface ProductPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 /** Pré-renderiza as 4 páginas de produto como estáticas (melhora TTFB/LCP). */
@@ -14,8 +14,9 @@ export function generateStaticParams() {
   return getAllProducts().map((product) => ({ id: product.id }));
 }
 
-export default function ProductPage({ params }: ProductPageProps) {
-  const product = getProductById(params.id);
+export default async function ProductPage({ params }: ProductPageProps) {
+  const { id } = await params;
+  const product = getProductById(id);
 
   if (!product) {
     notFound();

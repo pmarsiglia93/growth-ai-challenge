@@ -39,11 +39,11 @@ Relato honesto de como construí este projeto com apoio de IA.
 
 | Diferencial | Status | Evidência |
 | ----------- | ------ | --------- |
-| Testes automatizados | Implementado | 72 testes em `__tests__/`: widget, rota, protocolo NDJSON e isolamento do cache; Anthropic totalmente mockada |
+| Testes automatizados | Implementado | 74 testes em `__tests__/`: widget, rota, protocolo NDJSON e isolamento do cache; Anthropic totalmente mockada |
 | Tipagem forte no backend | Implementado | `tsconfig.json` com `strict` + `noUncheckedIndexedAccess`; validação por type guards em `lib/types.ts` e `lib/enrich.ts`; zero `any` |
-| Streaming com `ReadableStream` | Implementado ponta a ponta | A rota emite NDJSON e o widget consome com reader + decoder; validado por cliente HTTP real em dev/produção e por testes de UI |
+| Streaming com `ReadableStream` | Implementado ponta a ponta | A rota emite snapshots NDJSON palavra a palavra e o widget os substitui por índice; validado por cliente HTTP real e testes de UI |
 | Suporte a `pt-BR` e `en` | Implementado | Toggle PT/EN no widget, `locale` no payload, prompt por idioma e cache chaveado por `productId + locale` |
-| 2º fluxo n8n com `Schedule Trigger` | Implementado | `n8n/flow-schedule.json`, Schedule Trigger → Code (4 produtos) → HTTP → Log |
+| 2º fluxo n8n com `Schedule Trigger` | Implementado | `n8n/flow-schedule.json`, Schedule Trigger/execução imediata → Code (4 produtos) → HTTP → Log; validado no n8n 2.33.3 |
 
 ## O que corrigi ou rejeitei
 
@@ -79,8 +79,8 @@ Relato honesto de como construí este projeto com apoio de IA.
 - **Cache por idioma**: ao adicionar pt-BR/en, percebi que o cache por `productId`
   devolveria o idioma errado ao trocar; ajustei a chave para `productId + locale`.
 - **ESLint não configurado**: numa auditoria final, `npm run lint` caía num prompt
-  interativo por falta de config. Adicionei `.eslintrc.json` (`next/core-web-vitals`)
-  e as devDependencies — sem tocar em código; o lint passou limpo de primeira.
+  interativo por falta de config. Adicionei `next/core-web-vitals`; na migração
+  final para Next 16/ESLint 9, converti a configuração para `eslint.config.mjs`.
 - **Documentação otimista demais**: este arquivo chegou a afirmar que o projeto
   cobria "os cinco diferenciais" na mesma página em que admitia que o streaming
   não estava na UI. Troquei a afirmação genérica por uma tabela com status e
@@ -92,7 +92,7 @@ Relato honesto de como construí este projeto com apoio de IA.
 - **Testes que só existiam de um lado**: havia 5 testes de UI e nenhum da API.
   Cobri a rota (validação, cache, idioma, erro do provedor, chave ausente,
   streaming) com o SDK inteiramente mockado. A auditoria com Codex ampliou a
-  cobertura para 72 testes, incluindo `Content-Type`, contrato estrito, resposta
+  cobertura para 74 testes, incluindo `Content-Type`, contrato estrito, resposta
   obsoleta, linha final sem `\n`, cancelamento upstream e mutação do cache.
 - **Cancelamento incompleto no servidor**: abortar o `fetch` fechava a UI, mas não
   havia ligação explícita com o stream da Anthropic. A auditoria passou a cancelar
@@ -101,6 +101,19 @@ Relato honesto de como construí este projeto com apoio de IA.
 - **Erros internos expostos**: mensagens de parse e do provedor podiam atravessar
   a API. Mantive o diagnóstico somente no log do servidor e padronizei a resposta
   pública amigável, com teste que impede vazamento de detalhes.
+- **Seletor de idioma no mobile**: a validação manual revelou que título, selo e
+  botões PT/EN competiam pela mesma linha. Reorganizei o cabeçalho em duas linhas
+  nas telas estreitas, mantive o layout horizontal no desktop e marquei o widget
+  com `lang="pt-BR"` ou `lang="en"` para tecnologias assistivas.
+- **Exports do n8n incompatíveis com 2.x**: a importação real no n8n 2.33.3
+  detectou que faltava o `id` no nível dos workflows. Adicionei IDs estáveis aos
+  dois arquivos e um `Execute Workflow Trigger` ao fluxo agendado, mantendo o
+  `Schedule Trigger`, para que a execução dos quatro produtos seja reproduzível
+  por CLI. Validei o webhook nos ramos 200/400 e o fluxo agendado com 4 respostas 200.
+- **Dependências vulneráveis**: `npm audit` identificou vulnerabilidades altas no
+  Next 14/PostCSS e em dependências de desenvolvimento. Migrei de forma controlada
+  para Next 16.3, PostCSS 8.5.25 e ESLint 9, adaptei o App Router e encerrei a
+  auditoria com zero vulnerabilidades, sem usar atualização forçada.
 
 ## Aprendizados
 
@@ -126,6 +139,5 @@ Relato honesto de como construí este projeto com apoio de IA.
 - Validação da saída do LLM é de forma, não de veracidade.
 - Sem teste de browser end-to-end: o streaming na UI é coberto por testes com
   `ReadableStream` real e por verificação manual com `curl -N`.
-- O histórico registra validação anterior em n8n 1.x; nesta auditoria final o
-  binário não estava instalado, então os JSONs foram validados estruturalmente,
-  não importados nem executados novamente.
+- Os exports do n8n foram validados na versão 2.33.3; por usarem schemas internos
+  de nós, versões diferentes podem exigir migração de `typeVersion`.

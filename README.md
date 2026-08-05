@@ -16,7 +16,7 @@ descrição), chama um LLM da Anthropic e gera **2–3 bullets de benefícios** 
 
 ### Stack
 
-- Next.js 14 (App Router) + React 18 + TypeScript em modo estrito (zero `any` no backend).
+- Next.js 16 (App Router) + React 18 + TypeScript em modo estrito (zero `any` no backend).
 - Tailwind CSS (visual simples — não é o foco da avaliação).
 - LLM: Anthropic via SDK oficial (`anthropic.messages.create` / `.stream`).
 
@@ -24,9 +24,9 @@ descrição), chama um LLM da Anthropic e gera **2–3 bullets de benefícios** 
 
 | Diferencial | Status |
 | ----------- | ------ |
-| Testes automatizados | Implementado (72 testes de widget, API, protocolo e cache) |
+| Testes automatizados | Implementado (74 testes de widget, API, protocolo e cache) |
 | Tipagem forte no backend | Implementado (`strict` + `noUncheckedIndexedAccess`, zero `any`) |
-| Streaming com `ReadableStream` | Implementado ponta a ponta (NDJSON, server → UI) |
+| Streaming com `ReadableStream` | Implementado ponta a ponta (NDJSON palavra a palavra, server → UI) |
 | Suporte a `pt-BR` e `en` | Implementado (toggle + cache por idioma) |
 | 2º fluxo n8n com `Schedule Trigger` | Implementado (`n8n/flow-schedule.json`) |
 
@@ -34,8 +34,9 @@ Limitações conhecidas estão listadas no fim deste arquivo.
 
 ## Pré-requisitos
 
-- Node.js 18+ (testado em Node 20) e npm.
+- Node.js 20.9+ (app testado em Node 20.20) e npm.
 - Uma chave de API da Anthropic (`ANTHROPIC_API_KEY`).
+- Para o n8n: Docker (recomendado) ou Node.js 22 para executar a versão 2.33.3.
 
 ## Como rodar local
 
@@ -69,10 +70,10 @@ Variáveis de ambiente (ver `.env.example`):
 ### Testes, lint, tipagem e build
 
 ```bash
-npm test          # Jest + Testing Library (72 testes, nenhuma chamada real de API)
+npm test          # Jest + Testing Library (74 testes, nenhuma chamada real de API)
 npm run lint      # ESLint (next/core-web-vitals)
 npm run typecheck # tsc --noEmit
-npm run build     # build de produção
+npm run build     # build de produção (Webpack, estável no ambiente do case)
 ```
 
 ### Como conferir cada requisito manualmente
@@ -84,7 +85,7 @@ Com `npm run dev` no ar:
 | Catálogo | `http://localhost:3000` — 4 produtos |
 | Páginas de produto | `/product/001` … `/product/004` |
 | Produto inexistente | `/product/999` → página "Produto não encontrado" (404) |
-| Geração + streaming | abra um produto: os benefícios e as FAQs aparecem um a um |
+| Geração + streaming | abra um produto: benefícios e respostas aparecem palavra a palavra |
 | Regeneração | botão **Regenerar** — o conteúdo muda (cache invalidado antes) |
 | Cache | recarregue a página: a 2ª carga é instantânea (JSON do cache) |
 | Idioma | toggle **PT/EN** no cabeçalho do widget |
@@ -109,22 +110,32 @@ então erros 4xx/5xx da API não derrubam o fluxo: caem no ramo `false` do IF.
 
 ### Validação e ressalva de versão
 
-O histórico do projeto registra uma validação ao vivo anterior numa versão 1.x
-do n8n (import via CLI e disparo dos ramos de sucesso e erro). Na auditoria final
-atual, o executável do n8n não estava instalado: os dois arquivos foram parseados
-como JSON e revisados estruturalmente, mas não reexecutados. Por isso, siga o teste
-abaixo no ambiente n8n que será usado na avaliação.
+Na auditoria final, os dois arquivos foram importados e executados no **n8n 2.33.3**
+oficial via Docker. O fluxo principal passou no ramo de sucesso (resposta real da
+Anthropic) e no ramo de erro HTTP 400. O fluxo agendado processou os quatro produtos,
+com quatro respostas HTTP 200, e chegou ao nó `Log por Produto` com status `success`.
 
-Ressalva honesta: o schema interno dos nós do n8n **muda entre versões** (campos,
-`typeVersion`, formato de `conditions`). Em uma instalação muito antiga (n8n pré-1.0)
-algum nó pode importar com aviso de versão — nesse caso, reabra o nó na UI, confirme
-a operação e salve. Na versão 1.x registrada no histórico, rodou sem ajustes.
+Os workflows possuem IDs estáveis para importação por CLI. O fluxo agendado também
+tem o gatilho `Executar Agora`, além do `Schedule Trigger`, para permitir um teste
+imediato e reproduzível sem esperar os 30 minutos. Como o schema interno do n8n muda
+entre versões, use a versão 2.33.3 indicada abaixo.
 
 ### Passo a passo
 
 1. **Suba o app** (noutro terminal): `npm run dev` (ou `npm start` após `npm run build`).
    Garanta que `http://localhost:3000/api/enrich-product` responde.
-2. **Suba o n8n**: `npx n8n` e abra `http://localhost:5678`.
+2. **Suba o n8n 2.33.3** e abra `http://localhost:5678`:
+
+   ```bash
+   # Opção recomendada no Linux: usa o Node da imagem e alcança o app em localhost:3000
+   docker run --rm --name growth-ai-n8n --network host \
+     -v growth-ai-n8n:/home/node/.n8n \
+     n8nio/n8n:2.33.3
+
+   # Alternativa sem Docker (requer Node.js 22)
+   npx --yes n8n@2.33.3
+   ```
+
 3. **Importe o fluxo**: menu (⋯) → **Import from File** → selecione `n8n/flow.json`.
 4. **Valide os nós**: abra cada nó e confirme — em especial o **IF** (`statusCode == 200`)
    e o **HTTP Request** (URL, método POST e o JSON do body). Reconecte qualquer
@@ -156,14 +167,19 @@ a operação e salve. Na versão 1.x registrada no histórico, rodou sem ajustes
 X minutos (default 30), dispara o enriquecimento dos 4 produtos em sequência.
 
 ```
-Schedule Trigger (a cada 30 min)
+Schedule Trigger (a cada 30 min) ou Executar Agora
   → Code "Lista de Produtos" (emite os 4 produtos como itens)
       → HTTP Request (roda 1x por produto, batchSize 1) → Set "Log por Produto"
 ```
 
 Importe da mesma forma (`Import from File` → `n8n/flow-schedule.json`). Ajuste o
 intervalo no nó **Schedule Trigger** e clique em **Execute Workflow** para testar
-agora (não precisa esperar o agendamento). O app Next precisa estar rodando.
+agora (não precisa esperar o agendamento). O app Next precisa estar rodando. Para
+reproduzir exatamente a validação por CLI, importe o arquivo e execute:
+
+```bash
+npx --yes n8n@2.33.3 execute --id=growth-ai-scheduled-enrichment --rawOutput
+```
 
 ## Como eu integraria isso em produção (VTEX IO)
 
@@ -177,7 +193,7 @@ agora (não precisa esperar o agendamento). O app Next precisa estar rodando.
 
 ## Decisões técnicas e por quê
 
-- **App Router (Next 14).** A rota de API (`app/api/.../route.ts`) e as páginas
+- **App Router (Next 16).** A rota de API (`app/api/.../route.ts`) e as páginas
   Server/Client convivem no mesmo projeto; o widget é o único client component.
 - **Cache em memória + invalidação no regenerate.** Um `Map` em escopo de módulo
   guarda uma cópia do resultado por `productId + locale`. Sem `regenerate`, serve
@@ -255,9 +271,8 @@ agora (não precisa esperar o agendamento). O app Next precisa estar rodando.
 - **O idioma é escolhido no cliente** (`navigator.language` + toggle). Não há
   rotas `/pt-BR` e `/en` nem i18n de rota — só o conteúdo do widget é traduzido;
   o resto da página está em português.
-- **`n8n/*.json` depende da versão do n8n.** Há registro de validação anterior
-  em n8n 1.x, mas a auditoria atual foi estrutural; outra versão pode pedir ajuste
-  de `typeVersion` (detalhes na seção do n8n).
+- **`n8n/*.json` depende da versão do n8n.** Os dois arquivos foram importados e
+  executados no n8n 2.33.3; outra versão pode pedir ajuste de `typeVersion`.
 - **A verificação do streaming no navegador foi feita via testes automatizados**
   (com `ReadableStream` real) **e via cliente HTTP contra dev e produção**; não há
   teste de browser end-to-end (Playwright/Cypress) no projeto.
