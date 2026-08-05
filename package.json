@@ -2,6 +2,9 @@
   "name": "growth-ai-challenge",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.22.0 <25"
+  },
   "scripts": {
     "dev": "next dev",
     "prebuild": "npm run typecheck",
@@ -9,7 +12,10 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "validate": "npm test -- --runInBand && npm run lint && npm run build",
+    "n8n": "N8N_USER_FOLDER=.n8n-local npx --yes n8n@2.33.3",
+    "n8n:import": "N8N_USER_FOLDER=.n8n-local npx --yes n8n@2.33.3 import:workflow --input=n8n/flow.json && N8N_USER_FOLDER=.n8n-local npx --yes n8n@2.33.3 import:workflow --input=n8n/flow-schedule.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.1",

@@ -4,6 +4,49 @@ App standalone em Next.js (App Router) que, dado um produto (título, categoria,
 descrição), chama um LLM da Anthropic e gera **2–3 bullets de benefícios** e
 **3 perguntas frequentes com respostas**. 100% local — sem auth, sem banco, sem deploy.
 
+## Comece aqui
+
+Use **Node.js 22.22.0** para o app e para o n8n. O arquivo `.nvmrc` evita troca
+manual de versão:
+
+```bash
+# Com nvm (recomendado)
+nvm install
+nvm use
+
+# Instala exatamente o lockfile
+npm ci
+
+# Cria a configuração local; preencha ANTHROPIC_API_KEY no arquivo .env
+cp .env.example .env
+
+# Inicia o app
+npm run dev
+```
+
+Abra **http://localhost:3000**. A chave fica somente no `.env`, que é ignorado
+pelo Git. Não é necessário banco, conta, seed ou serviço adicional para testar o app.
+
+### Validação automática
+
+Este comando não consome a API da Anthropic; o SDK é mockado nos testes:
+
+```bash
+npm run validate
+```
+
+Ele executa, em sequência: **74 testes**, ESLint, TypeScript estrito e build de
+produção. Para rodar separadamente: `npm test`, `npm run lint`,
+`npm run typecheck` e `npm run build`.
+
+### Roteiro manual de 5 minutos
+
+1. Abra qualquer produto e aguarde benefícios e FAQs surgirem palavra a palavra.
+2. Clique em **Regenerar** e confirme que um novo conteúdo é produzido.
+3. Alterne entre **PT** e **EN**; somente o conteúdo de IA muda de idioma.
+4. Recarregue a página e observe a resposta imediata do cache em memória.
+5. No modo mobile, confirme que os botões PT/EN ocupam uma linha própria.
+
 ## Visão geral
 
 - **Catálogo** (`/`) lista 4 produtos de `data/products.json`.
@@ -32,29 +75,6 @@ descrição), chama um LLM da Anthropic e gera **2–3 bullets de benefícios** 
 
 Limitações conhecidas estão listadas no fim deste arquivo.
 
-## Pré-requisitos
-
-- Node.js 20.9+ (app testado em Node 20.20) e npm.
-- Uma chave de API da Anthropic (`ANTHROPIC_API_KEY`).
-- Para o n8n: Docker (recomendado) ou Node.js 22 para executar a versão 2.33.3.
-
-## Como rodar local
-
-```bash
-# 1. Instalar exatamente as dependências do lockfile
-npm ci
-
-# 2. Criar o .env a partir do exemplo e preencher a chave
-cp .env.example .env
-#   edite .env e defina ANTHROPIC_API_KEY=sk-ant-...
-
-# 3. Subir em desenvolvimento
-npm run dev
-
-# 4. Abrir no navegador
-#   http://localhost:3000
-```
-
 Variáveis de ambiente (ver `.env.example`):
 
 | Variável            | Default                     | Descrição                                                        |
@@ -66,15 +86,6 @@ Variáveis de ambiente (ver `.env.example`):
 > O streaming só é usado quando o cliente pede `Accept: application/x-ndjson`
 > (o widget pede; o n8n e um `curl` comum, não). Consumidores que esperam JSON
 > continuam recebendo JSON, sem configuração extra.
-
-### Testes, lint, tipagem e build
-
-```bash
-npm test          # Jest + Testing Library (74 testes, nenhuma chamada real de API)
-npm run lint      # ESLint (next/core-web-vitals)
-npm run typecheck # tsc --noEmit
-npm run build     # build de produção (Webpack, estável no ambiente do case)
-```
 
 ### Como conferir cada requisito manualmente
 
@@ -93,93 +104,62 @@ Com `npm run dev` no ar:
 | Payload inválido | `curl -X POST .../api/enrich-product -H 'Content-Type: application/json' -d '{"productId":"001"}'` → `400` |
 | Sem chave | `ANTHROPIC_API_KEY= npm run dev` → o widget mostra a mensagem de erro |
 
-## Como rodar e importar o fluxo n8n
+## Testar o n8n
 
-O arquivo `n8n/flow.json` representa o fluxo:
-
-```
-Webhook (POST /webhook/produto)
-  → HTTP Request (POST http://localhost:3000/api/enrich-product)
-      → IF (statusCode == 200)
-          ├─ true  → Set "Log Sucesso"  (loga a resposta)
-          └─ false → Set "Tratar Erro"  (loga statusCode + mensagem de falha)
-```
-
-O nó HTTP usa **Continue On Fail** (`onError: continueRegularOutput`) + `neverError`,
-então erros 4xx/5xx da API não derrubam o fluxo: caem no ramo `false` do IF.
-
-### Validação e ressalva de versão
-
-Na auditoria final, os dois arquivos foram importados e executados no **n8n 2.33.3**
-oficial via Docker. O fluxo principal passou no ramo de sucesso (resposta real da
-Anthropic) e no ramo de erro HTTP 400. O fluxo agendado processou os quatro produtos,
-com quatro respostas HTTP 200, e chegou ao nó `Log por Produto` com status `success`.
-
-Os workflows possuem IDs estáveis para importação por CLI. O fluxo agendado também
-tem o gatilho `Executar Agora`, além do `Schedule Trigger`, para permitir um teste
-imediato e reproduzível sem esperar os 30 minutos. Como o schema interno do n8n muda
-entre versões, use a versão 2.33.3 indicada abaixo.
-
-### Passo a passo
-
-1. **Suba o app** (noutro terminal): `npm run dev` (ou `npm start` após `npm run build`).
-   Garanta que `http://localhost:3000/api/enrich-product` responde.
-2. **Suba o n8n 2.33.3** e abra `http://localhost:5678`:
-
-   ```bash
-   # Opção recomendada no Linux: usa o Node da imagem e alcança o app em localhost:3000
-   docker run --rm --name growth-ai-n8n --network host \
-     -v growth-ai-n8n:/home/node/.n8n \
-     n8nio/n8n:2.33.3
-
-   # Alternativa sem Docker (requer Node.js 22)
-   npx --yes n8n@2.33.3
-   ```
-
-3. **Importe o fluxo**: menu (⋯) → **Import from File** → selecione `n8n/flow.json`.
-4. **Valide os nós**: abra cada nó e confirme — em especial o **IF** (`statusCode == 200`)
-   e o **HTTP Request** (URL, método POST e o JSON do body). Reconecte qualquer
-   conexão que não tenha vindo na importação.
-5. **Ative/execute**: clique em **Execute Workflow** (ou ative o webhook em produção).
-   Copie a **Test URL** do nó Webhook.
-6. **Dispare um teste** (noutro terminal):
-
-   ```bash
-   curl -X POST http://localhost:5678/webhook-test/produto \
-     -H "Content-Type: application/json" \
-     -d '{
-       "productId": "001",
-       "productTitle": "Tênis Running Pro X200",
-       "productDescription": "Tênis de corrida com amortecimento EVA duplo.",
-       "category": "Calçados Esportivos"
-     }'
-   ```
-
-   > A URL exata (`/webhook/produto` vs `/webhook-test/produto`) aparece no próprio
-   > nó Webhook — use a que o n8n mostrar.
-7. **Confira a execução** na aba *Executions*: o ramo Sucesso deve conter `bullets`
-   e `faqs`; force um erro (ex.: app desligado) para ver o ramo de falha tratado.
-8. **Reexporte** se ajustar algo: **Download** / *Export* → salve por cima de `n8n/flow.json`.
-
-### Segundo fluxo (opcional) — agendado, processa os 4 produtos
-
-`n8n/flow-schedule.json` é um **diferencial**: um **Schedule Trigger** que, a cada
-X minutos (default 30), dispara o enriquecimento dos 4 produtos em sequência.
-
-```
-Schedule Trigger (a cada 30 min) ou Executar Agora
-  → Code "Lista de Produtos" (emite os 4 produtos como itens)
-      → HTTP Request (roda 1x por produto, batchSize 1) → Set "Log por Produto"
-```
-
-Importe da mesma forma (`Import from File` → `n8n/flow-schedule.json`). Ajuste o
-intervalo no nó **Schedule Trigger** e clique em **Execute Workflow** para testar
-agora (não precisa esperar o agendamento). O app Next precisa estar rodando. Para
-reproduzir exatamente a validação por CLI, importe o arquivo e execute:
+Mantenha o app rodando em `localhost:3000`. Em outro terminal, use os dois
+comandos abaixo; eles fixam o n8n em **2.33.3**, importam os fluxos e guardam os
+dados numa pasta local isolada (`.n8n-local`, ignorada pelo Git):
 
 ```bash
-npx --yes n8n@2.33.3 execute --id=growth-ai-scheduled-enrichment --rawOutput
+nvm use
+npm run n8n:import
+npm run n8n
 ```
+
+Na primeira execução, o `npx` baixa o n8n e pode levar alguns minutos. Nas
+próximas execuções ele reutiliza o download local.
+
+Abra **http://localhost:5678**. No primeiro acesso, o n8n pode solicitar a criação
+de um usuário local; isso não exige conta no n8n Cloud.
+
+### Fluxo principal
+
+Abra **Growth AI - Enriquecimento de Produto**, clique em **Execute Workflow** e
+dispare a URL de teste mostrada no nó Webhook:
+
+```bash
+curl -X POST http://localhost:5678/webhook-test/produto \
+  -H "Content-Type: application/json" \
+  -d '{
+    "productId": "001",
+    "productTitle": "Tênis Running Pro X200",
+    "productDescription": "Tênis de corrida com solado de borracha carbono, cabedal em mesh respirável, amortecimento EVA duplo e drop de 8mm. Indicado para treinos de longa distância em asfalto.",
+    "category": "Calçados Esportivos"
+  }'
+```
+
+O retorno deve ter `status: "sucesso"`, 2–3 `bullets` e exatamente 3 `faqs`.
+Envie `{}` para a mesma URL para confirmar o ramo alternativo com HTTP 400 tratado.
+
+```text
+Webhook → HTTP /api/enrich-product → IF statusCode == 200
+                                      ├─ sucesso → Log Sucesso
+                                      └─ falha   → Tratar Erro
+```
+
+### Fluxo agendado
+
+Abra **Growth AI - Enriquecimento Agendado (todos os produtos)** e clique em
+**Execute Workflow**. O fluxo processa os quatro produtos em sequência; o último
+nó deve mostrar quatro itens com `statusCode: 200`. O `Schedule Trigger` está
+configurado para 30 minutos e o gatilho `Executar Agora` permite o teste imediato.
+
+Os dois fluxos foram importados e executados de ponta a ponta no n8n 2.33.3. O
+principal passou nos ramos 200 e 400; o agendado concluiu os quatro produtos com
+status `success`.
+
+> Alternativa com Docker: a imagem `n8nio/n8n:2.33.3` também foi validada. O
+> caminho com Node 22 acima é o mais simples para avaliar este repositório.
 
 ## Como eu integraria isso em produção (VTEX IO)
 
