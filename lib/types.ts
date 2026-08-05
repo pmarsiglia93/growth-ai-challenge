@@ -41,3 +41,32 @@ export interface EnrichResult {
 export interface ApiError {
   error: string;
 }
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+/** Type guard de `Faq`. */
+export function isFaq(value: unknown): value is Faq {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return isNonEmptyString(candidate.question) && isNonEmptyString(candidate.answer);
+}
+
+/**
+ * Type guard do contrato completo de `EnrichResult`. A mesma regra é aplicada
+ * nas duas fronteiras: resposta final da API e evento `done` do stream.
+ */
+export function isEnrichResult(value: unknown): value is EnrichResult {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    Array.isArray(candidate.bullets) &&
+    candidate.bullets.length >= 2 &&
+    candidate.bullets.length <= 3 &&
+    candidate.bullets.every(isNonEmptyString) &&
+    Array.isArray(candidate.faqs) &&
+    candidate.faqs.length === 3 &&
+    candidate.faqs.every(isFaq)
+  );
+}

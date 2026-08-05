@@ -8,6 +8,13 @@ import type { EnrichResult, Locale } from "@/lib/types";
  */
 const store = new Map<string, EnrichResult>();
 
+function cloneResult(result: EnrichResult): EnrichResult {
+  return {
+    bullets: [...result.bullets],
+    faqs: result.faqs.map((faq) => ({ ...faq })),
+  };
+}
+
 function cacheKey(productId: string, locale: Locale): string {
   return `${productId}:${locale}`;
 }
@@ -16,7 +23,8 @@ export function getCached(
   productId: string,
   locale: Locale,
 ): EnrichResult | undefined {
-  return store.get(cacheKey(productId, locale));
+  const cached = store.get(cacheKey(productId, locale));
+  return cached ? cloneResult(cached) : undefined;
 }
 
 export function setCached(
@@ -24,7 +32,7 @@ export function setCached(
   locale: Locale,
   result: EnrichResult,
 ): void {
-  store.set(cacheKey(productId, locale), result);
+  store.set(cacheKey(productId, locale), cloneResult(result));
 }
 
 export function invalidateCache(productId: string, locale: Locale): void {

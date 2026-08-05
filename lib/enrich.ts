@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { EnrichResult, Faq, Locale } from "@/lib/types";
+import { isFaq, type EnrichResult, type Locale } from "@/lib/types";
 
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOKENS = 1024;
@@ -65,16 +65,6 @@ function extractJsonObject(raw: string): string {
     throw new EnrichError("Resposta do LLM não contém um objeto JSON.");
   }
   return text.slice(start, end + 1);
-}
-
-/** Type guard para `Faq`. */
-function isFaq(value: unknown): value is Faq {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.question === "string" &&
-    typeof candidate.answer === "string"
-  );
 }
 
 /**
